@@ -106,7 +106,8 @@ struct MixSegment {
         assert_check([&] { return runes.size() <= std::numeric_limits<RuneIndex>::max(); },
                      "MixSegment: input exceeds the word-range limit");
         result.clear();
-        result.reserve(runes.size() / 2);
+        // A partition has at most one word per rune, so appending never reallocates.
+        result.reserve(runes.size());
         detail::mix_cut_append<hmm>(dict, model, runes, 0, result, scratch);
     }
 };
