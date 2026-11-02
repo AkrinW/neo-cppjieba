@@ -19,7 +19,7 @@
 ## 快速开始
 
 使用 CMake 3.20+ 和支持 C++23（包括 `<format>`、`<print>`）的编译器及标准库。
-CI 覆盖 GCC 15、LLVM 23 / libc++ 和 Visual Studio 2026，详见 [构建环境](docs/building.md#环境)。
+CI 覆盖 GCC 16、LLVM 23 / libc++ 和 Visual Studio 2026，详见 [构建环境](docs/building.md#环境)。
 
 ```sh
 git clone https://github.com/AkrinW/neo-cppjieba.git

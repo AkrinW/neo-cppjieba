@@ -9,7 +9,7 @@
 
 | 平台 | CI 工具链 |
 | --- | --- |
-| Linux x64 / ARM64 | GCC 15 |
+| Linux x64 / ARM64 | GCC 16 |
 | macOS ARM64 | Homebrew LLVM 23 / libc++ |
 | Windows x64 | Visual Studio 2026 |
 
@@ -105,8 +105,10 @@ GoogleTest 按父项目目标、本地安装、源码下载的顺序查找；使
 
 ## 质量检查
 
-[Quality 工作流](../.github/workflows/quality.yml) 直接使用 `ubuntu-26.04` 预装的工具链：格式、静态分析、fuzz 和覆盖率
-使用 LLVM 22，sanitizer 使用默认的 GCC 15。本地格式化请使用 clang-format 22，与 CI 结果保持一致。各项检查的本地命令如下：
+CI 中每种工具链只用一个版本，Linux 任务自行安装：GCC 16 来自 Ubuntu 26.04 软件源（该源提供的是 16-20260322 开发快照），
+LLVM 23 来自 apt.llvm.org，软件源由 `tools/add-llvm-apt-source.sh` 添加。Linux 上的 Clang 任务同时安装 libstdc++ 16，
+与 GCC 任务使用同一标准库。本地格式化请使用 clang-format 23，与 CI 结果保持一致。
+[Quality 工作流](../.github/workflows/quality.yml) 各项检查的本地命令如下：
 
 | 检查 | 本地命令 |
 | --- | --- |

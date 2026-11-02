@@ -13,8 +13,9 @@ permissions:
   contents: read
 
 env:
-  # Matches the Quality workflow's preinstalled toolchain.
-  LLVM_VERSION: "22"
+  # Matches the Quality workflow's toolchain.
+  GCC_VERSION: "16"
+  LLVM_VERSION: "23"
   FUZZ_SECONDS: ${{ inputs.seconds || '600' }}
 
 jobs:
@@ -40,6 +41,10 @@ jobs:
         target: ${{ fromJSON(needs.targets.outputs.list) }}
     steps:
       - uses: actions/checkout@v7
+      - name: Install Clang, LLVM tools and libstdc++
+        run: |
+          tools/add-llvm-apt-source.sh "$LLVM_VERSION"
+          sudo apt-get install -y "clang-$LLVM_VERSION" "libclang-rt-$LLVM_VERSION-dev" "llvm-$LLVM_VERSION" "libstdc++-$GCC_VERSION-dev"
       # Debug keeps library assertions fatal; -O1 keeps the execution rate useful.
       - name: Configure
         run: >-

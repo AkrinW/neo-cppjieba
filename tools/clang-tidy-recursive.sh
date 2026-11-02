@@ -283,7 +283,7 @@ main() {
     CLANG_TIDY_BIN=$(resolve_clang_tidy)
     BUILD_DIR=${BUILD_DIR:-${BUILD_DIR_DEFAULT}}
     # Set GCC_TOOLCHAIN to an empty value to use the compiler's default GCC installation.
-    GCC_TOOLCHAIN=${GCC_TOOLCHAIN-/home/cwang/dev1/gcc-15.2-o3}
+    GCC_TOOLCHAIN=${GCC_TOOLCHAIN-}
     MAX_PASSES=${MAX_PASSES:-${MAX_PASSES_DEFAULT}}
     PER_FILE_TIMEOUT=${PER_FILE_TIMEOUT:-${PER_FILE_TIMEOUT_DEFAULT}}
     JOBS=${JOBS:-$(nproc)}

@@ -10,8 +10,10 @@ permissions:
   contents: read
 
 env:
-  # Preinstalled on ubuntu-26.04; format locally with the same clang-format major version.
-  LLVM_VERSION: "22"
+  # Each toolchain has one version: GCC from the Ubuntu archive, LLVM from apt.llvm.org. Clang jobs also install
+  # libstdc++ of this GCC, which Clang then prefers to the runner's GCC 15; format locally with clang-format 23.
+  GCC_VERSION: "16"
+  LLVM_VERSION: "23"
   # Package and GoogleTest discovery checks configure separate projects; the main CMake workflow runs them.
   CTEST_EXCLUDE: "^neo_(cpp_api_install|c_api_install|googletest_)"
 
@@ -21,6 +23,10 @@ jobs:
     runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v7
+      - name: Install clang-format
+        run: |
+          tools/add-llvm-apt-source.sh "$LLVM_VERSION"
+          sudo apt-get install -y "clang-format-$LLVM_VERSION"
       - name: Check formatting
         run: CLANG_FORMAT="clang-format-$LLVM_VERSION" tools/clang-format-recursive.sh --check
 
@@ -29,6 +35,10 @@ jobs:
     runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v7
+      - name: Install Clang and libstdc++
+        run: |
+          tools/add-llvm-apt-source.sh "$LLVM_VERSION"
+          sudo apt-get install -y "clang-$LLVM_VERSION" "libstdc++-$GCC_VERSION-dev"
       # Builds with BUILD_TESTING also compile each header alone through the neo_header_check target.
       - name: Check that each header compiles alone and templates find their callees
         run: CLANG_CXX="clang++-$LLVM_VERSION" tools/check-headers.sh
@@ -39,6 +49,10 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
+      - name: Install Clang, clang-tidy and libstdc++
+        run: |
+          tools/add-llvm-apt-source.sh "$LLVM_VERSION"
+          sudo apt-get install -y "clang-$LLVM_VERSION" "clang-tidy-$LLVM_VERSION" "libstdc++-$GCC_VERSION-dev"
       - name: Initialize comparison dependencies
         run: git submodule update --init deps/cppjieba deps/limonp deps/jieba-rs
       # Every optional component is configured so each checked source has a real compile command.
@@ -64,6 +78,10 @@ jobs:
     timeout-minutes: 75
     steps:
       - uses: actions/checkout@v7
+      - name: Install Clang, clang-tidy and libstdc++
+        run: |
+          tools/add-llvm-apt-source.sh "$LLVM_VERSION"
+          sudo apt-get install -y "clang-$LLVM_VERSION" "clang-tidy-$LLVM_VERSION" "libstdc++-$GCC_VERSION-dev"
       - name: Initialize comparison dependencies
         run: git submodule update --init deps/cppjieba deps/limonp deps/jieba-rs
       - name: Configure the compilation database
@@ -107,13 +125,15 @@ jobs:
       TSAN_OPTIONS: halt_on_error=1:second_deadlock_stack=1
     steps:
       - uses: actions/checkout@v7
+      - name: Install GCC
+        run: sudo apt-get update && sudo apt-get install -y "gcc-$GCC_VERSION" "g++-$GCC_VERSION"
       - name: Limit ASLR entropy to what sanitizer shadow memory supports
         run: sudo sysctl vm.mmap_rnd_bits=28
       # GCC links its sanitizer runtimes dynamically, so the shared C ABI keeps -z defs and is tested too.
       - name: Configure
         run: >-
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
-          -DCMAKE_C_COMPILER=gcc-15 -DCMAKE_CXX_COMPILER=g++-15
+          -DCMAKE_C_COMPILER="gcc-$GCC_VERSION" -DCMAKE_CXX_COMPILER="g++-$GCC_VERSION"
           "-DCMAKE_C_FLAGS=${{ matrix.flags }}" "-DCMAKE_CXX_FLAGS=${{ matrix.flags }}"
           -DBUILD_TESTING=ON -DCPPJIEBA_BUILD_C_API=ON
           -DCPPJIEBA_C_API_BUILD_SHARED=ON -DCPPJIEBA_C_API_BUILD_STATIC=ON
@@ -152,18 +172,27 @@ jobs:
         -Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion -Wshadow -Wno-float-conversion ${{ matrix.extra_flags }}
     steps:
       - uses: actions/checkout@v7
+      - name: Install GCC
+        if: matrix.compiler == 'gcc'
+        run: sudo apt-get update && sudo apt-get install -y "gcc-$GCC_VERSION" "g++-$GCC_VERSION"
+      - name: Install Clang and libstdc++
+        if: matrix.compiler == 'clang'
+        run: |
+          tools/add-llvm-apt-source.sh "$LLVM_VERSION"
+          sudo apt-get install -y "clang-$LLVM_VERSION" "libstdc++-$GCC_VERSION-dev"
       # GoogleTest builds from source, so its templates are checked where our tests instantiate them.
       - name: Configure
         run: |
-          if [ "${{ matrix.compiler }}" = gcc ]; then cc=gcc-15 cxx=g++-15; else cc="clang-$LLVM_VERSION" cxx="clang++-$LLVM_VERSION"; fi
+          if [ "${{ matrix.compiler }}" = gcc ]; then cc="gcc-$GCC_VERSION" cxx="g++-$GCC_VERSION"; else cc="clang-$LLVM_VERSION" cxx="clang++-$LLVM_VERSION"; fi
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug \
             -DCMAKE_C_COMPILER="$cc" -DCMAKE_CXX_COMPILER="$cxx" \
             "-DCMAKE_C_FLAGS=$WARNING_FLAGS" "-DCMAKE_CXX_FLAGS=$WARNING_FLAGS" -DCMAKE_COMPILE_WARNING_AS_ERROR=ON \
             -DCMAKE_DISABLE_FIND_PACKAGE_GTest=ON \
             -DBUILD_TESTING=ON -DCPPJIEBA_BUILD_C_API=ON \
             -DCPPJIEBA_C_API_BUILD_SHARED=ON -DCPPJIEBA_C_API_BUILD_STATIC=ON
+      # Keep going after a failure so one run reports every warning.
       - name: Build
-        run: cmake --build build --parallel 4
+        run: cmake --build build --parallel 4 -- -k 0
       - name: Test unit, C ABI and fuzz corpus replays
         run: ctest --test-dir build -E "$CTEST_EXCLUDE" --no-tests=error --output-on-failure --parallel 4
 
@@ -180,6 +209,10 @@ jobs:
         -fsanitize-ignorelist=${{ github.workspace }}/tools/implicit-conversion.ignorelist
     steps:
       - uses: actions/checkout@v7
+      - name: Install Clang and libstdc++
+        run: |
+          tools/add-llvm-apt-source.sh "$LLVM_VERSION"
+          sudo apt-get install -y "clang-$LLVM_VERSION" "libclang-rt-$LLVM_VERSION-dev" "libstdc++-$GCC_VERSION-dev"
       # Clang links the sanitizer runtime only into executables, which the shared C ABI's -z defs rejects,
       # so the static C ABI library carries the C ABI tests here.
       - name: Configure
@@ -203,8 +236,10 @@ jobs:
       LIBCXX_FLAGS: -O1 -g -stdlib=libc++ -D_LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_DEBUG
     steps:
       - uses: actions/checkout@v7
-      - name: Install libc++
-        run: sudo apt-get update && sudo apt-get install -y "libc++-$LLVM_VERSION-dev" "libc++abi-$LLVM_VERSION-dev"
+      - name: Install Clang and libc++
+        run: |
+          tools/add-llvm-apt-source.sh "$LLVM_VERSION"
+          sudo apt-get install -y "clang-$LLVM_VERSION" "libc++-$LLVM_VERSION-dev" "libc++abi-$LLVM_VERSION-dev"
       # GoogleTest is built from source against libc++. The shared C ABI bundles the GNU C++ runtime on Linux,
       # so the static C ABI library carries the C ABI tests here.
       - name: Configure
@@ -226,6 +261,10 @@ jobs:
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v7
+      - name: Install Clang, LLVM tools and libstdc++
+        run: |
+          tools/add-llvm-apt-source.sh "$LLVM_VERSION"
+          sudo apt-get install -y "clang-$LLVM_VERSION" "libclang-rt-$LLVM_VERSION-dev" "llvm-$LLVM_VERSION" "libstdc++-$GCC_VERSION-dev"
       # Debug keeps library assertions fatal; -O1 keeps the execution rate useful.
       - name: Configure
         run: >-
@@ -270,11 +309,11 @@ jobs:
         with:
           # The baseline is the pull request's target branch or the commit a push replaced.
           fetch-depth: 0
-      - name: Install Valgrind
-        run: sudo apt-get update && sudo apt-get install -y valgrind
+      - name: Install GCC and Valgrind
+        run: sudo apt-get update && sudo apt-get install -y "gcc-$GCC_VERSION" "g++-$GCC_VERSION" valgrind
       - name: Count instructions against the baseline
         env:
-          CXX: g++-15
+          CXX: g++-${{ env.GCC_VERSION }}
           BASELINE: >-
             ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref)
             || github.event.before || 'HEAD~1' }}
@@ -295,6 +334,10 @@ jobs:
         with:
           # Changed-line coverage diffs a pull request against the merge base with its target branch.
           fetch-depth: 0
+      - name: Install Clang, LLVM tools and libstdc++
+        run: |
+          tools/add-llvm-apt-source.sh "$LLVM_VERSION"
+          sudo apt-get install -y "clang-$LLVM_VERSION" "libclang-rt-$LLVM_VERSION-dev" "llvm-$LLVM_VERSION" "libstdc++-$GCC_VERSION-dev"
       - name: Check the coverage summary script
         run: python3 -B -m unittest discover -s tools -p 'coverage_summary_test.py' -v
       # The shared C ABI links the profile runtime privately and writes its own profile, so both variants count.

@@ -107,7 +107,7 @@ neo C++, Rust and Python through `python_compare_benchmark.py`. The `Rust=OFF` j
 checks the standalone C++ benchmark configuration.
 
 All four implementations run serially on one allowed CPU of the same runner,
-using the common dictionary and HMM model. CI uses GCC 15, Rust 1.99.0 and Python
+using the common dictionary and HMM model. CI uses GCC 16, Rust 1.99.0 and Python
 3.14.8; comparison dependencies are pinned by submodule revisions and `Cargo.lock`.
 
 | Corpus | Rounds per sample | Samples |

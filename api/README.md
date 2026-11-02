@@ -24,7 +24,7 @@ select at least one library form.
 
 | Platform in CI | Shared library | Static library |
 | --- | --- | --- |
-| Linux x64/ARM64, GCC 15 | `libneo_cppjieba_c.so.1` | `libneo_cppjieba_c.a` |
+| Linux x64/ARM64, GCC 16 | `libneo_cppjieba_c.so.1` | `libneo_cppjieba_c.a` |
 | macOS ARM64, LLVM 23/libc++ | `libneo_cppjieba_c.1.dylib` | `libneo_cppjieba_c.a` |
 | Windows x64, MSVC 2026 | `neo_cppjieba_c.dll` and import library `neo_cppjieba_c.lib` | `neo_cppjieba_c_static.lib` |
 

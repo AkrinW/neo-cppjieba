@@ -117,6 +117,8 @@
 - `PosTag` 和 `pos::` 常量移至 `neo/value/PosTag.hpp`，命名空间不变；`neo/Jieba.hpp` 仍包含它。
 - `with_source_text` 移入 `neo_cppjieba::detail`；用户词典单字集合改用 `gtl::flat_hash_set`，
   且无单字时跳过查询。
+- CI 每种工具链只用一个版本：Linux 任务从 Ubuntu 软件源安装 GCC 16，经 `tools/add-llvm-apt-source.sh` 从 apt.llvm.org
+  安装 LLVM 23，与 macOS 的 Homebrew LLVM 23 一致；Clang 任务同时安装 libstdc++ 16。
 
 ### Upgrade notes
 

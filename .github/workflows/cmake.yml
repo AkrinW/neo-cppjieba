@@ -16,7 +16,7 @@ permissions:
 
 env:
   BUILD_TYPE: Release
-  CXX: g++-15
+  CXX: g++-16
 
 jobs:
   build:
@@ -41,7 +41,7 @@ jobs:
         run: git submodule update --init deps/cppjieba
 
       - name: Install C++23 compiler
-        run: sudo apt-get update && sudo apt-get install -y g++-15
+        run: sudo apt-get update && sudo apt-get install -y g++-16
 
       - name: Configure CMake
         run: cmake -B ${{github.workspace}}/build -DBUILD_TESTING=ON -DCPPJIEBA_BUILD_C_API=OFF -DCPPJIEBA_BUILD_LEGACY_TESTS=${{matrix.legacy_tests}} -DCPPJIEBA_BUILD_BENCHMARKS=OFF -DCMAKE_CXX_STANDARD=${{matrix.cpp_version}} -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
@@ -93,7 +93,7 @@ jobs:
         if: matrix.rust == 'ON'
         run: git submodule update --init deps/jieba-rs deps/python-jieba
       - name: Install C++23 compiler
-        run: sudo apt-get update && sudo apt-get install -y g++-15
+        run: sudo apt-get update && sudo apt-get install -y g++-16
       - name: Set up Python
         if: matrix.rust == 'ON'
         uses: actions/setup-python@v7
@@ -318,6 +318,8 @@ jobs:
     runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v7
+      - name: Install C++23 compiler
+        run: sudo apt-get update && sudo apt-get install -y g++-16
       - name: Configure only the public library
         run: cmake -S . -B build -DBUILD_TESTING=OFF -DCPPJIEBA_BUILD_BENCHMARKS=OFF
       - name: Install public headers and data
