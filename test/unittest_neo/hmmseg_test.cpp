@@ -385,8 +385,8 @@ TEST_F(HMModelTest, ViterbiReconstructsLongWordsAndSingletonsAcrossAllStates) {
     constexpr auto block_count = RuneIndex{1024};
     auto runes = Unicode{};
     auto expected = std::vector<WordRange>{};
-    runes.reserve(5 * block_count);
-    expected.reserve(2 * block_count);
+    runes.reserve(std::size_t{5} * block_count);
+    expected.reserve(std::size_t{2} * block_count);
     for (auto i = RuneIndex{0}; i < block_count; ++i) {
         runes.insert(runes.end(), {U'甲', U'乙', U'丙', U'丁', U'𠮷'});
         expected.push_back({5 * i, 5 * i + 4});
@@ -575,7 +575,7 @@ TEST(HMMSegmentTest, SingleCharacter) {
     auto runes = decode(std::string_view{"我"});
     auto result = cut<HMMSegment>(unused_dict(), model, runes);
     auto words = to_strings(runes, result);
-    ASSERT_EQ(words.size(), 1);
+    ASSERT_EQ(words.size(), 1U);
     EXPECT_EQ(words[0], "我");
 }
 

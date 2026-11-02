@@ -642,14 +642,14 @@ TEST(DictTrieTest, FindDag) {
     EXPECT_EQ(dag.offsets.size(), runes.size() + 1);
 
     auto edges_0 = dag.get_edges(0); // '来'
-    ASSERT_GE(edges_0.size(), 2);    // '来', '来到'
-    EXPECT_EQ(edges_0[0].next_pos, 1);
-    EXPECT_EQ(edges_0[1].next_pos, 2);
+    ASSERT_GE(edges_0.size(), 2U);   // '来', '来到'
+    EXPECT_EQ(edges_0[0].next_pos, 1U);
+    EXPECT_EQ(edges_0[1].next_pos, 2U);
 
     auto edges_4 = dag.get_edges(4); // '科'
-    ASSERT_GE(edges_4.size(), 2);    // '科', '科技', '科技大学'?
+    ASSERT_GE(edges_4.size(), 2U);   // '科', '科技', '科技大学'?
     // check single char has a length
-    EXPECT_EQ(edges_4[0].next_pos, 5);
+    EXPECT_EQ(edges_4[0].next_pos, 5U);
 
     // Check that all single chars at least have (i, i+1)
     for (size_t i = 0; i < runes.size(); ++i) {
@@ -663,7 +663,7 @@ TEST(DictTrieTest, FindDag) {
 
 TEST(DagTest, EmptyDag) {
     auto dag = Dag{};
-    EXPECT_EQ(dag.size(), 0);
+    EXPECT_EQ(dag.size(), 0U);
     EXPECT_TRUE(dag.get_edges(0).empty());
 
     auto runes = Unicode{};
@@ -700,7 +700,7 @@ TEST(DagTest, SizeMismatchReturnsEmpty) {
     auto dag = Dag{};
     dag.offsets = {0, 1, 1};
     dag.edges = {{1, 1.0f}};
-    EXPECT_EQ(dag.size(), 2);
+    EXPECT_EQ(dag.size(), 2U);
 
     auto runes = decode(std::string_view{"三个字"});
     EXPECT_EQ(dag.to_string(runes), "");
@@ -710,7 +710,7 @@ TEST(DagTest, SingleCharToString) {
     auto dag = Dag{};
     dag.offsets = {0, 1};
     dag.edges = {{1, -5.0f}};
-    EXPECT_EQ(dag.size(), 1);
+    EXPECT_EQ(dag.size(), 1U);
 
     auto runes = decode(std::string_view{"我"});
     EXPECT_EQ(dag.to_string(runes), "我(-5)");

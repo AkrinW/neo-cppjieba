@@ -26,7 +26,7 @@ extern "C" auto LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t siz
     try {
         const auto dict = detail::load_dict_snapshot(SnapshotSource::memory(bytes, "<fuzz>"));
         static_cast<void>(dict);
-    } catch (const LogConfig::Exception &) {
+    } catch (const LogConfig::Exception &) { // NOLINT(bugprone-empty-catch): rejection is the expected outcome.
     }
     return 0;
 }

@@ -10,6 +10,34 @@ permissions:
   contents: read
 
 jobs:
+  # Released symbols and public types must stay binary compatible; additions are reported only.
+  abi:
+    name: C ABI compatibility with the latest release
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v7
+        with:
+          # The baseline is the latest v* tag reachable from the checkout.
+          fetch-depth: 0
+
+      - name: Install GCC and libabigail
+        run: sudo apt-get update && sudo apt-get install -y gcc-16 g++-16 abigail-tools
+
+      - name: Compare with the latest release
+        env:
+          CC: gcc-16
+          CXX: g++-16
+        run: tools/check-c-abi.sh build-abi
+
+      - name: Publish the ABI report
+        if: always()
+        run: |
+          if [ -f build-abi/summary.md ]; then
+            cat build-abi/summary.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
   build-and-test:
     name: C API / ${{ matrix.platform.name }} / ${{ matrix.build_type }}
     runs-on: ${{ matrix.platform.runner }}
@@ -29,7 +57,7 @@ jobs:
 
       - name: Install GCC on Linux
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y gcc-15 g++-15
+        run: sudo apt-get update && sudo apt-get install -y gcc-16 g++-16
 
       - name: Install LLVM and libc++ on macOS
         if: runner.os == 'macOS'
@@ -39,7 +67,7 @@ jobs:
         if: runner.os == 'Linux'
         run: >-
           cmake -S . -B build-c-api
-          -DCMAKE_C_COMPILER=gcc-15 -DCMAKE_CXX_COMPILER=g++-15
+          -DCMAKE_C_COMPILER=gcc-16 -DCMAKE_CXX_COMPILER=g++-16
           -DCMAKE_CXX_STANDARD=23 -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
           -DBUILD_TESTING=ON -DCPPJIEBA_BUILD_C_API=ON
           -DCPPJIEBA_C_API_BUILD_SHARED=ON -DCPPJIEBA_C_API_BUILD_STATIC=ON

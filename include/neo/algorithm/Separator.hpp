@@ -62,9 +62,9 @@ inline auto get_pre_filter_separators(std::span<const char32_t> runes, std::vect
                  "Separator input has {} runes, exceeding the supported index range", runes.size());
     auto n = static_cast<RuneIndex>(runes.size());
     out.clear();
-    out.reserve(n / 8); // heuristic: ~12.5% separators
+    out.reserve(to_index(n / 8)); // heuristic: ~12.5% separators
     for (auto i = RuneIndex{0}; i < n; ++i) {
-        if (is_default_separator_unlikely(runes[i])) {
+        if (is_default_separator_unlikely(runes[to_index(i)])) {
             out.push_back(i);
         }
     }

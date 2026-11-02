@@ -80,9 +80,9 @@ TEST_F(CApiTest, EmptyInputProducesEmptyOwnedResultsInEveryMode) {
         ASSERT_NE(owned, nullptr);
         const auto data = borrow(owned);
         EXPECT_EQ(data.utf8_data, nullptr);
-        EXPECT_EQ(data.utf8_size, 0);
+        EXPECT_EQ(data.utf8_size, 0U);
         EXPECT_EQ(data.ranges, nullptr);
-        EXPECT_EQ(data.count, 0);
+        EXPECT_EQ(data.count, 0U);
     }
 }
 
@@ -153,17 +153,17 @@ TEST_F(CApiTest, InvalidUtf8ReturnsAnErrorWithoutPublishingAResult) {
     EXPECT_EQ(neo_jieba_v1_cut_utf8_owned(engine.get(), input.data(), input.size(), NEO_JIEBA_V1_MIX, &result, &error),
               NEO_JIEBA_V1_OPERATION_FAILED);
     EXPECT_EQ(result, nullptr);
-    EXPECT_GT(error.message_size, 0);
+    EXPECT_GT(error.message_size, 0U);
     EXPECT_NE(error_storage[0], '\0');
 }
 
 TEST_F(CApiTest, SuccessfulCallClearsPreviousDiagnostics) {
     neo_jieba_tokens_v1 *result = nullptr;
     ASSERT_EQ(neo_jieba_v1_cut_utf8_owned(engine.get(), "x", 1, 256, &result, &error), NEO_JIEBA_V1_INVALID_ARGUMENT);
-    ASSERT_GT(error.message_size, 0);
+    ASSERT_GT(error.message_size, 0U);
     const auto owned = cut("中国", NEO_JIEBA_V1_MP);
     ASSERT_NE(owned, nullptr);
-    EXPECT_EQ(error.message_size, 0);
+    EXPECT_EQ(error.message_size, 0U);
     EXPECT_EQ(error_storage[0], '\0');
 }
 
@@ -207,9 +207,9 @@ TEST_F(CApiTest, InvalidArgumentsReturnStatusAndClearBorrowedOutput) {
     auto borrowed = neo_jieba_borrowed_tokens_v1{"x", 1, nullptr, 99};
     EXPECT_EQ(neo_jieba_v1_tokens_borrow_data(nullptr, &borrowed, &error), NEO_JIEBA_V1_INVALID_ARGUMENT);
     EXPECT_EQ(borrowed.utf8_data, nullptr);
-    EXPECT_EQ(borrowed.utf8_size, 0);
+    EXPECT_EQ(borrowed.utf8_size, 0U);
     EXPECT_EQ(borrowed.ranges, nullptr);
-    EXPECT_EQ(borrowed.count, 0);
+    EXPECT_EQ(borrowed.count, 0U);
 }
 
 TEST_F(CApiTest, MissingPathArgumentsAreRejected) {
@@ -227,7 +227,7 @@ TEST_F(CApiTest, TruncatedDiagnosticsRemainTerminatedAndReportFullSize) {
     neo_jieba_tokens_v1 *result = nullptr;
     EXPECT_EQ(neo_jieba_v1_cut_utf8_owned(engine.get(), "x", 1, 0, &result, &tiny), NEO_JIEBA_V1_INVALID_ARGUMENT);
     EXPECT_EQ(std::string_view{storage.data()}, "Unk");
-    EXPECT_GT(tiny.message_size, 3);
+    EXPECT_GT(tiny.message_size, 3U);
     EXPECT_EQ(storage[4], '!');
 }
 
@@ -236,7 +236,7 @@ TEST_F(CApiTest, DiagnosticsCanBeLengthOnlyOrOmitted) {
     neo_jieba_tokens_v1 *result = nullptr;
     EXPECT_EQ(neo_jieba_v1_cut_utf8_owned(engine.get(), "x", 1, 0, &result, &length_only),
               NEO_JIEBA_V1_INVALID_ARGUMENT);
-    EXPECT_GT(length_only.message_size, 0);
+    EXPECT_GT(length_only.message_size, 0U);
     EXPECT_EQ(neo_jieba_v1_cut_utf8_owned(engine.get(), "x", 1, 0, &result, nullptr), NEO_JIEBA_V1_INVALID_ARGUMENT);
 }
 
@@ -246,7 +246,7 @@ TEST_F(CApiTest, InvalidDiagnosticBufferDoesNotPublishAnOwner) {
     EXPECT_EQ(neo_jieba_v1_cut_utf8_owned(engine.get(), "x", 1, NEO_JIEBA_V1_MP, &result, &invalid),
               NEO_JIEBA_V1_INVALID_ARGUMENT);
     EXPECT_EQ(result, nullptr);
-    EXPECT_EQ(invalid.message_size, 0);
+    EXPECT_EQ(invalid.message_size, 0U);
 }
 
 TEST(CApiLifetimeTest, DestroyAcceptsNullHandles) {

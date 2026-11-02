@@ -1,0 +1,115 @@
+name: Nightly fuzz
+
+on:
+  schedule:
+    - cron: '17 3 * * *'  # Every day at 03:17 UTC
+  workflow_dispatch:
+    inputs:
+      seconds:
+        description: Seconds to fuzz each target
+        default: '600'
+
+permissions:
+  contents: read
+
+env:
+  # Matches the Quality workflow's toolchain.
+  GCC_VERSION: "16"
+  LLVM_VERSION: "23"
+  FUZZ_SECONDS: ${{ inputs.seconds || '600' }}
+
+jobs:
+  targets:
+    name: List fuzz targets
+    runs-on: ubuntu-26.04
+    outputs:
+      list: ${{ steps.list.outputs.list }}
+    steps:
+      - uses: actions/checkout@v7
+      # tools/fuzz.sh is the single list of targets, so new harnesses join the nightly run automatically.
+      - id: list
+        run: echo "list=[$(tools/fuzz.sh --list | sed 's/.*/"&"/' | paste -sd, -)]" >> "$GITHUB_OUTPUT"
+
+  fuzz:
+    name: ${{ matrix.target }}
+    needs: targets
+    runs-on: ubuntu-26.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ${{ fromJSON(needs.targets.outputs.list) }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install Clang, LLVM tools and libstdc++
+        run: |
+          tools/add-llvm-apt-source.sh "$LLVM_VERSION"
+          sudo apt-get install -y "clang-$LLVM_VERSION" "libclang-rt-$LLVM_VERSION-dev" "llvm-$LLVM_VERSION" "libstdc++-$GCC_VERSION-dev"
+      # Debug keeps library assertions fatal; -O1 keeps the execution rate useful.
+      - name: Configure
+        run: >-
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
+          -DCMAKE_CXX_COMPILER="clang++-$LLVM_VERSION" -DCMAKE_CXX_FLAGS=-O1
+          -DBUILD_TESTING=OFF -DCPPJIEBA_BUILD_FUZZERS=ON
+      - name: Build
+        run: cmake --build build --parallel 4 --target "${{ matrix.target }}_fuzzer"
+      - name: Restore the fuzz corpus
+        uses: actions/cache/restore@v6
+        with:
+          path: build/fuzz-run/corpus
+          key: fuzz-corpus-${{ github.run_id }}
+          restore-keys: fuzz-corpus-
+      - name: Fuzz with one process per core
+        env:
+          FUZZ_FORK: "4"
+          FUZZ_MINIMIZE: "1"
+        run: tools/fuzz.sh build "$FUZZ_SECONDS" "${{ matrix.target }}"
+      # A crash stops before minimizing, so the target's corpus is kept only after a clean run.
+      - name: Upload the target corpus
+        uses: actions/upload-artifact@v7
+        with:
+          name: corpus-${{ matrix.target }}
+          path: build/fuzz-run/corpus/${{ matrix.target }}/
+          if-no-files-found: error
+          retention-days: 2
+      - name: Upload crash reproducers
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: fuzz-artifacts-${{ matrix.target }}
+          path: build/fuzz-run/artifacts/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  save-corpus:
+    name: Save the merged corpus
+    needs: fuzz
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-26.04
+    steps:
+      # Targets whose job failed keep their previous corpus from the restored cache.
+      - name: Restore the fuzz corpus
+        uses: actions/cache/restore@v6
+        with:
+          path: build/fuzz-run/corpus
+          key: fuzz-corpus-${{ github.run_id }}
+          restore-keys: fuzz-corpus-
+      - name: Download the target corpora
+        uses: actions/download-artifact@v8
+        with:
+          pattern: corpus-*
+          path: build/fuzz-run/downloaded
+      - name: Replace each fuzzed target's corpus
+        run: |
+          shopt -s nullglob
+          mkdir -p build/fuzz-run/corpus
+          for downloaded in build/fuzz-run/downloaded/corpus-*; do
+            target=${downloaded##*/corpus-}
+            rm -rf "build/fuzz-run/corpus/${target}"
+            mv "${downloaded}" "build/fuzz-run/corpus/${target}"
+          done
+      - name: Save the fuzz corpus
+        uses: actions/cache/save@v6
+        with:
+          path: build/fuzz-run/corpus
+          key: fuzz-corpus-${{ github.run_id }}

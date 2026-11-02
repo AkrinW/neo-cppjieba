@@ -3,6 +3,9 @@ HeaderFilterRegex: '^(include/neo|test|benchmark)/'
 ExcludeHeaderFilterRegex: '(^benchmark/Perf\.hpp$|(^|/)include/neo/third_party/)'
 
 # misc-include-cleaner treats the facades' IWYU export pragmas as the public include surface.
+# bugprone checks run except where they flag deliberate code: swappable parameters, noexcept logging, UTF bit
+# operations, timing arithmetic, fixed seeds, casts that widen in 128-bit variants and separately sized views.
+# The slower clang-analyzer checks run in their own Quality job through CLANG_TIDY_CHECKS.
 Checks: >
   -*,
   misc-include-cleaner,
@@ -33,7 +36,15 @@ Checks: >
   cppcoreguidelines-prefer-member-initializer,
   modernize-return-braced-init-list,
   modernize-use-trailing-return-type,
-  google-readability-casting
+  google-readability-casting,
+  bugprone-*,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-exception-escape,
+  -bugprone-signed-bitwise,
+  -bugprone-narrowing-conversions,
+  -bugprone-random-generator-seed,
+  -bugprone-misplaced-widening-cast,
+  -bugprone-suspicious-stringview-data-usage
 
 CheckOptions:
   - key: modernize-use-trailing-return-type.TransformLambdas

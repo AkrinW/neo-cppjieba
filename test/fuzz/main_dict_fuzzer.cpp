@@ -17,7 +17,7 @@ extern "C" auto LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t siz
         const auto dict = detail::DictTrie{DictSource::memory(as_text(data, size)), std::span<const DictSource>{},
                                            detail::UserWordWeightOption::WordWeightMedian};
         static_cast<void>(dict);
-    } catch (const LogConfig::Exception &) {
+    } catch (const LogConfig::Exception &) { // NOLINT(bugprone-empty-catch): rejection is the expected outcome.
     }
     return 0;
 }

@@ -292,7 +292,7 @@ TEST(EncodedJiebaTest, ConvertedTokensBorrowUtf8Storage) {
     const auto source = std::string{gbk_academy};
     const auto utf8 = IcuCodec::to_utf8(source, EncodingId::GBK);
     const auto result = test_jieba().cut(utf8, CutMode::MIX);
-    ASSERT_EQ(result.size(), 1);
+    ASSERT_EQ(result.size(), 1U);
     EXPECT_EQ(result[0].word, "中国科学院");
     EXPECT_EQ(result[0].word.data(), utf8.data());
     EXPECT_EQ(result[0].position, (TokenPosition{{0, 5}, {0, 15}}));
@@ -339,7 +339,7 @@ TEST(EncodedJiebaTest, ConvertingSourceSubviewProducesLocalUtf8Offsets) {
     const auto storage = std::string{"prefix"} + std::string{gbk_academy} + "suffix";
     const auto source = std::string_view{storage}.substr(6, gbk_academy.size());
     const auto result = test_jieba().cut_owned(IcuCodec::to_utf8(source, EncodingId::GBK), CutMode::MIX);
-    ASSERT_EQ(result.size(), 1);
+    ASSERT_EQ(result.size(), 1U);
     EXPECT_EQ(result[0].word, "中国科学院");
     EXPECT_EQ(result[0].word.data(), result.source().data());
     EXPECT_EQ(result[0].position.source, (SourceRange{0, 15}));
@@ -378,7 +378,7 @@ TEST(EncodedJiebaTest, ValidUtf8BytesDoNotIdentifyTheirOriginalEncoding) {
 
 TEST(EncodedJiebaTest, Utf8ConversionCanFeedExistingOwnedResults) {
     const auto result = test_jieba().cut_owned(IcuCodec::to_utf8(gbk_academy, EncodingId::GBK), CutMode::MIX);
-    ASSERT_EQ(result.size(), 1);
+    ASSERT_EQ(result.size(), 1U);
     EXPECT_EQ(result[0].word, "中国科学院");
     EXPECT_EQ(result[0].word.data(), result.source().data());
     EXPECT_EQ(result[0].position.source, (SourceRange{0, 15}));

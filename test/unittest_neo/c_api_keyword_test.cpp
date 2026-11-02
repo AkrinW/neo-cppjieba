@@ -301,12 +301,12 @@ TEST_F(CApiKeywordTest, FailedExtractionLeavesKeywordsEmpty) {
     EXPECT_EQ(neo_jieba_v1_tfidf_extract_into(tfidf.get(), engine.get(), invalid.data(), invalid.size(), 5,
                                               &unfiltered_tfidf_options, workspace.get(), keywords.get(), &error),
               NEO_JIEBA_V1_OPERATION_FAILED);
-    EXPECT_GT(error.message_size, 0);
+    EXPECT_GT(error.message_size, 0U);
     const auto data = borrow_keywords(keywords);
     EXPECT_EQ(data.keywords, nullptr);
-    EXPECT_EQ(data.count, 0);
+    EXPECT_EQ(data.count, 0U);
     EXPECT_EQ(data.occurrences, nullptr);
-    EXPECT_EQ(data.occurrence_count, 0);
+    EXPECT_EQ(data.occurrence_count, 0U);
 }
 
 TEST_F(CApiKeywordTest, KeywordExtractionRejectsMissingHandlesAndInput) {
@@ -321,7 +321,7 @@ TEST_F(CApiKeywordTest, KeywordExtractionRejectsMissingHandlesAndInput) {
     EXPECT_EQ(neo_jieba_v1_tfidf_extract_into(nullptr, engine.get(), text, size, 5, options, workspace.get(),
                                               keywords.get(), &error),
               NEO_JIEBA_V1_INVALID_ARGUMENT);
-    EXPECT_EQ(borrow_keywords(keywords).count, 0);
+    EXPECT_EQ(borrow_keywords(keywords).count, 0U);
     EXPECT_EQ(neo_jieba_v1_tfidf_extract_into(tfidf.get(), nullptr, text, size, 5, options, workspace.get(),
                                               keywords.get(), &error),
               NEO_JIEBA_V1_INVALID_ARGUMENT);
@@ -391,8 +391,8 @@ TEST_F(CApiKeywordTest, KeywordHandleCreationChecksArgumentsAndSources) {
     EXPECT_EQ(neo_jieba_v1_keywords_create(nullptr, &error), NEO_JIEBA_V1_INVALID_ARGUMENT);
     auto data = neo_jieba_borrowed_keywords_v1{nullptr, 3, nullptr, 4};
     EXPECT_EQ(neo_jieba_v1_keywords_borrow_data(nullptr, &data, &error), NEO_JIEBA_V1_INVALID_ARGUMENT);
-    EXPECT_EQ(data.count, 0);
-    EXPECT_EQ(data.occurrence_count, 0);
+    EXPECT_EQ(data.count, 0U);
+    EXPECT_EQ(data.occurrence_count, 0U);
 }
 
 TEST_F(CApiKeywordTest, ConcurrentExtractionWithSeparateHandlesMatchesSerialExtraction) {

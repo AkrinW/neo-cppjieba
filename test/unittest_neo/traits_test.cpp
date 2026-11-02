@@ -182,7 +182,7 @@ TEST(TraitsTest, ByteArrayViewsRetainEmbeddedAndTrailingNul) {
     const std::byte input[] = {std::byte{'a'}, std::byte{}, std::byte{'b'}, std::byte{}};
     EXPECT_EQ(as_view(input), (std::string_view{"a\0b\0", 4}));
     EXPECT_EQ(as_code_units(input).data(), input);
-    EXPECT_EQ(as_code_units(input).size(), 4);
+    EXPECT_EQ(as_code_units(input).size(), 4U);
 }
 
 TEST(TraitsTest, ByteCodeUnitViewsSupportConstantEvaluation) {

@@ -1,0 +1,8 @@
+# Clang sanitizer ignorelist for -fsanitize=implicit-conversion builds: pass -fsanitize-ignorelist=<this file>.
+# Standard library templates convert between char and unsigned char, and between sizes and differences, on
+# purpose; matching their mangled names leaves only conversions in this repository's code to report.
+fun:_ZNSt*
+fun:_ZNKSt*
+fun:_ZSt*
+fun:_ZN9__gnu_cxx*
+fun:_ZNK9__gnu_cxx*

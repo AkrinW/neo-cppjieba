@@ -9,7 +9,7 @@
 
 | 平台 | CI 工具链 |
 | --- | --- |
-| Linux x64 / ARM64 | GCC 15 |
+| Linux x64 / ARM64 | GCC 16 |
 | macOS ARM64 | Homebrew LLVM 23 / libc++ |
 | Windows x64 | Visual Studio 2026 |
 
@@ -105,24 +105,53 @@ GoogleTest 按父项目目标、本地安装、源码下载的顺序查找；使
 
 ## 质量检查
 
-[Quality 工作流](../.github/workflows/quality.yml) 直接使用 `ubuntu-26.04` 预装的工具链：格式、静态分析、fuzz 和覆盖率
-使用 LLVM 22，sanitizer 使用默认的 GCC 15。本地格式化请使用 clang-format 22，与 CI 结果保持一致。各项检查的本地命令如下：
+CI 中每种工具链只用一个版本，Linux 任务自行安装：GCC 16 来自 Ubuntu 26.04 软件源（该源提供的是 16-20260322 开发快照），
+LLVM 23 来自 apt.llvm.org，软件源由 `tools/add-llvm-apt-source.sh` 添加。Linux 上的 Clang 任务同时安装 libstdc++ 16，
+与 GCC 任务使用同一标准库。本地格式化请使用 clang-format 23，与 CI 结果保持一致。
+[Quality 工作流](../.github/workflows/quality.yml) 各项检查的本地命令如下：
 
 | 检查 | 本地命令 |
 | --- | --- |
 | clang-format | `tools/clang-format-recursive.sh --check`；去掉 `--check` 即就地格式化 |
 | clang-tidy | `BUILD_DIR=build tools/clang-tidy-recursive.sh --check`；去掉 `--check` 即循环应用修复 |
+| clang 静态分析 | `CLANG_TIDY_CHECKS='-*,clang-analyzer-*,-clang-analyzer-cplusplus.Move,-clang-analyzer-optin.core.EnumCastOutOfRange' PER_FILE_TIMEOUT=900 BUILD_DIR=build tools/clang-tidy-recursive.sh --check` |
 | 头文件自足 | `tools/check-headers.sh`，`CLANG_CXX` 指定 Clang；`BUILD_TESTING` 构建同时编译 `neo_header_check` |
-| ASan + UBSan、TSan | 以 GCC 和工作流中的 `-fsanitize` 参数配置 Debug 构建，再运行 `ctest` |
-| libFuzzer | 以 `-DCPPJIEBA_BUILD_FUZZERS=ON` 构建，再运行 `tools/fuzz.sh <构建目录> [每个目标的秒数] [目标...]` |
+| ASan + UBSan、TSan | 以 GCC 和工作流中的 `-fsanitize` 参数配置 Debug 构建，再运行 `ctest`；ASan + UBSan 另加 `-D_GLIBCXX_ASSERTIONS` |
+| 警告即错误 | 以 GCC 或 Clang、`-Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion -Wshadow -Wno-float-conversion`（Clang 另加 `-Wno-implicit-float-conversion`）和 `-DCMAKE_COMPILE_WARNING_AS_ERROR=ON` 配置 Debug 构建 |
+| libc++ 加固 | 以 Clang、`-stdlib=libc++` 和 `-D_LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_DEBUG` 配置 Debug 构建，`-DCMAKE_DISABLE_FIND_PACKAGE_GTest=ON` 让 GoogleTest 按同一标准库从源码构建，再运行 `ctest` |
+| 隐式整数转换 | 以 Clang、`-fsanitize=implicit-conversion` 和 `-fsanitize-ignorelist=tools/implicit-conversion.ignorelist` 配置 Debug 构建，再运行 `ctest` |
+| libFuzzer | 以 `-DCPPJIEBA_BUILD_FUZZERS=ON` 构建，再运行 `tools/fuzz.sh <构建目录> [每个目标的秒数] [目标...]`；`--list` 列出目标 |
+| Fuzz 语料回放 | `BUILD_TESTING` 构建中运行 `ctest -R neo_fuzz_replay`，任意编译器均可 |
 | 覆盖率 | 以 `-fprofile-instr-generate -fcoverage-mapping` 构建，再运行 `tools/llvm-coverage.sh <构建目录> <输出目录>` |
+| 指令数 | `tools/instruction-counts.sh <工作目录> <基准修订>`，需要 Valgrind；见 [benchmark 指南](../benchmark/README.md#instruction-counts) |
+| C ABI 兼容性 | `tools/check-c-abi.sh <工作目录> [基准修订]`，需要 libabigail 的 `abidiff`；默认与最新的 `v*` 标签比较 |
 
 - clang-tidy 读取 `compile_commands.json`，构建目录需启用工作流中列出的全部可选组件。
+  `.clang-tidy` 启用 `bugprone-*`，并排除标出有意写法的几项；路径敏感的 `clang-analyzer-*` 比其他检查慢数倍，
+  由单独的 Quality 任务通过 `CLANG_TIDY_CHECKS` 运行。确属有意的个别写法用带理由的 `NOLINT` 注释标出。
   `CLANG_FORMAT`、`CLANG_TIDY` 指定工具路径；`GCC_TOOLCHAIN` 设为空值时使用编译器默认的 GCC。
+- 警告即错误任务覆盖全部容量变体。窄容量类型的运算经整数提升变为 `int`，库代码在原本隐式缩回的位置写出显式转换，
+  `-O3` 下生成的机器码与改写前逐函数一致。以 `RuneIndex` 作容器下标时经 `detail::to_index` 显式转换为 `size_t`，
+  128 位变体因此也无需关闭转换警告；下标不超过被访问容器的长度，转换不丢失数值。
 - Sanitizer 与覆盖率构建同时启用共享和静态 C ABI。GCC 的 sanitizer 运行库以动态库链接，满足共享库的 `-z defs`；
   sanitizer 会替换分配器，因此 sanitizer 任务跳过检查私有运行库的 `neo_c_api_symbols` 和 `neo_c_api_c_host`，
   二者由 C API 工作流在常规构建中运行。
+- C API 工作流用 `tools/check-c-abi.sh` 比较共享库与最新发布版：新增函数只列入报告，已发布符号或公开类型的变化使检查失败。
+  `--headers-dir` 把比较限于公开头文件中的类型，不透明句柄的内部实现可以自由变化。
+  `test/unittest_neo/c_api_abi_v1.c` 在各平台编译期冻结 v1 的类型、布局、数值和函数类型。
 - Fuzz 目标在 Debug 下构建以保留库断言，导致崩溃的输入写入 `<构建目录>/fuzz-run/artifacts/`。
+- `test/fuzz/corpus/<目标>/` 保存按边覆盖精简的语料，`tools/fuzz.sh` 只读取它，新输入写入 `<构建目录>/fuzz-run/corpus/`。
+  运行 `<构建目录>/fuzz/<目标>_fuzzer -set_cover_merge=1 -use_counters=0 test/fuzz/corpus/<目标> <构建目录>/fuzz-run/corpus/<目标>`
+  把带来新覆盖的输入并入语料；修复崩溃后把复现输入放入对应目录，作为回归测试。
+- `tools/fuzz.sh` 按输入格式为每个目标选用 `test/fuzz/dict/` 中的 libFuzzer 字典。`FUZZ_FORK=<n>` 为每个目标运行 n 个
+  fuzz 进程，`FUZZ_MINIMIZE=1` 在每个目标结束后把工作语料合并为带来覆盖的输入。
+- Quality 工作流对每个目标 fuzz 30 秒，从缓存的语料出发；PR 只读取缓存，master 的推送精简后保存。
+  [Nightly fuzz 工作流](../.github/workflows/fuzz-nightly.yml)每天为每个目标开一个任务，以 4 个进程 fuzz 10 分钟，
+  再把各目标精简后的语料合并存入同一缓存；手动触发时可指定每个目标的秒数。
+- 覆盖率脚本把 `summary.md` 写入输出目录，CI 将它发布为 job summary：总计、各目录和覆盖最少的文件按行和分支统计，
+  任一测试程序或模板实例到达即算覆盖。llvm-cov 把返回语句之后不可达的块尾（如 `case` 末尾的 `}`）记为 0，
+  因此只含右花括号的行在其前一可执行行被覆盖时计为覆盖。设置 `COVERAGE_BASE=<修订>` 时另列相对该修订改动行的覆盖，
+  PR 以目标分支为基准；`summary.txt` 保留 llvm-cov 按函数的统计，同一函数的多个实例覆盖不同时，两者的数字会有差异。
 
 ## 仓库布局
 

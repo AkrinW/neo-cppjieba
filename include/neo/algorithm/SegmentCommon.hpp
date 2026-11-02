@@ -19,12 +19,12 @@ namespace neo_cppjieba::detail {
                                                      RuneIndex pos) noexcept -> bool {
     auto next = pos;
     for (const auto &word : words) {
-        if (word.begin != next || word.begin >= word.end || word.end - pos > rune_count) {
+        if (word.begin != next || word.begin >= word.end || static_cast<RuneIndex>(word.end - pos) > rune_count) {
             return false;
         }
         next = word.end;
     }
-    return next - pos == rune_count;
+    return static_cast<RuneIndex>(next - pos) == rune_count;
 }
 
 /// Check that local word ranges form a nonempty-token partition of the rune span.
@@ -45,7 +45,7 @@ inline auto for_each_separated(std::span<const Rune> runes, OnText &&on_text, On
     auto begin = RuneIndex{0};
     for (auto i = size_t{0};; ++i) {
         const auto end = separators[i];
-        on_text(runes.subspan(begin, end - begin), begin);
+        on_text(runes.subspan(to_index(begin), to_index(end - begin)), begin);
         if (i + 1 == separators.size()) {
             return;
         }

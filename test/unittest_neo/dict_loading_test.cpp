@@ -231,8 +231,9 @@ TEST(DictLoadingTest, SnapshotErrorsNameTheSource) {
         EXPECT_NE(std::string_view{error.what()}.find("broken.snapshot"), std::string_view::npos) << error.what();
     }
     // A text dictionary passed where a snapshot is expected is reported, not parsed.
-    EXPECT_THROW(Jieba::from_snapshot(SnapshotSource::file(DICT_FILE), DictSource::file(HMM_MODEL_FILE)),
-                 LogConfig::Exception);
+    EXPECT_THROW(
+        static_cast<void>(Jieba::from_snapshot(SnapshotSource::file(DICT_FILE), DictSource::file(HMM_MODEL_FILE))),
+        LogConfig::Exception);
 }
 
 TEST(DictLoadingTest, WrittenSnapshotHoldsTheEncodedDictionaryAndLoads) {

@@ -172,7 +172,7 @@ TEST_F(CApiSourcesTest, CorruptSnapshotIsRejected) {
     EXPECT_EQ(neo_jieba_v1_engine_create_from_snapshot(&snapshot, &model, &result, &error),
               NEO_JIEBA_V1_OPERATION_FAILED);
     EXPECT_EQ(result, nullptr);
-    EXPECT_GT(error.message_size, 0);
+    EXPECT_GT(error.message_size, 0U);
 }
 
 TEST_F(CApiSourcesTest, SnapshotWriteIntoMissingDirectoryFails) {
@@ -180,7 +180,7 @@ TEST_F(CApiSourcesTest, SnapshotWriteIntoMissingDirectoryFails) {
     const auto path = std::string_view{TEST_DATA_DIR "/c_api_missing_directory/jieba.snapshot"};
     EXPECT_EQ(neo_jieba_v1_write_dict_snapshot(&dict, nullptr, 0, path.data(), path.size(), &error),
               NEO_JIEBA_V1_OPERATION_FAILED);
-    EXPECT_GT(error.message_size, 0);
+    EXPECT_GT(error.message_size, 0U);
     EXPECT_FALSE(std::filesystem::exists(TEST_DATA_DIR "/c_api_missing_directory"));
 }
 

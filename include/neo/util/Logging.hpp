@@ -248,6 +248,7 @@ struct LogFormatString {
     std::source_location loc;
 
     template <typename StringType>
+    // NOLINTNEXTLINE(bugprone-forwarding-reference-overload): built from format literals; copies use the copy ctor.
     consteval LogFormatString(StringType &&s, const std::source_location &l = std::source_location::current()) noexcept
         : fmt(std::forward<StringType>(s)), loc(Config::show_source_location ? l : std::source_location{}) {
     }

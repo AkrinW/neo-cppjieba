@@ -204,6 +204,8 @@ auto run_shared_method(const char *name, RustCutMethod method, neo_cppjieba::Cut
                 return bench_cut(borrowed_fn, lines, sample_rounds);
             case 7:
                 return bench_cut(reused_fn, lines, sample_rounds);
+            default:
+                break;
         }
         std::unreachable();
     };

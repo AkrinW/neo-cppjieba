@@ -8,7 +8,8 @@ function(cppjieba_add_c_api_tests name library)
         ${library} neo_cppjieba::neo_cppjieba cppjieba_test_support)
     add_test(NAME neo_${name}_tests COMMAND test_${name}.run)
 
-    add_executable(test_${name}_smoke.run c_api_smoke.c)
+    # c_api_abi_v1.c only holds compile-time checks that freeze the v1 types, layouts, values and function types.
+    add_executable(test_${name}_smoke.run c_api_smoke.c c_api_abi_v1.c)
     set_target_properties(test_${name}_smoke.run PROPERTIES C_STANDARD 11 C_STANDARD_REQUIRED YES C_EXTENSIONS NO)
     if(MSVC)
         target_compile_options(test_${name}_smoke.run PRIVATE /utf-8)

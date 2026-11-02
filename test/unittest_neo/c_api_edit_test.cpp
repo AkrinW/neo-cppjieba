@@ -166,7 +166,7 @@ TEST_F(CApiEditTest, InvalidUtf8EditsFailWithoutChangingTheDictionary) {
     const auto invalid = std::string_view{"中\xE4\xB8"};
     EXPECT_EQ(neo_jieba_v1_engine_add_word(edited.get(), invalid.data(), invalid.size(), &tag, &error),
               NEO_JIEBA_V1_OPERATION_FAILED);
-    EXPECT_GT(error.message_size, 0);
+    EXPECT_GT(error.message_size, 0U);
     auto removed = uint32_t{1};
     EXPECT_EQ(neo_jieba_v1_engine_remove_word(edited.get(), invalid.data(), invalid.size(), &removed, &error),
               NEO_JIEBA_V1_OPERATION_FAILED);

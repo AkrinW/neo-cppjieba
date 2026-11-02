@@ -176,31 +176,31 @@ struct PrivateLogConfig {
 
 // An incomplete configuration must be rejected at the logging API boundary.
 struct MissingExceptionConfig {
-    static constexpr auto show_source_location = true;
-    static constexpr auto min_level = LogConfig::min_level;
-    static constexpr auto buffer_size = LogConfig::buffer_size;
+    [[maybe_unused]] static constexpr auto show_source_location = true;
+    [[maybe_unused]] static constexpr auto min_level = LogConfig::min_level;
+    [[maybe_unused]] static constexpr auto buffer_size = LogConfig::buffer_size;
 };
 
 // An exception alias alone does not specify the source location policy.
 struct MissingSourceLocationConfig {
-    static constexpr auto min_level = LogConfig::min_level;
-    static constexpr auto buffer_size = LogConfig::buffer_size;
+    [[maybe_unused]] static constexpr auto min_level = LogConfig::min_level;
+    [[maybe_unused]] static constexpr auto buffer_size = LogConfig::buffer_size;
     using Exception = ProjectError;
 };
 
 // A constructible message type still needs to be an exception.
 struct InvalidExceptionConfig {
-    static constexpr auto show_source_location = true;
-    static constexpr auto min_level = LogConfig::min_level;
-    static constexpr auto buffer_size = LogConfig::buffer_size;
+    [[maybe_unused]] static constexpr auto show_source_location = true;
+    [[maybe_unused]] static constexpr auto min_level = LogConfig::min_level;
+    [[maybe_unused]] static constexpr auto buffer_size = LogConfig::buffer_size;
     using Exception = std::string;
 };
 
 // An integer switch must not implicitly satisfy the boolean configuration contract.
 struct IntegerSourceLocationConfig {
     static constexpr auto show_source_location = 1;
-    static constexpr auto min_level = LogConfig::min_level;
-    static constexpr auto buffer_size = LogConfig::buffer_size;
+    [[maybe_unused]] static constexpr auto min_level = LogConfig::min_level;
+    [[maybe_unused]] static constexpr auto buffer_size = LogConfig::buffer_size;
     using Exception = ProjectError;
 };
 
@@ -213,11 +213,12 @@ auto runtime_config_value(T value) -> T {
 // An uninitialized constant declaration cannot supply a compile-time policy value.
 struct NonConstantSourceLocationConfig {
     static const bool show_source_location;
-    static constexpr auto min_level = LogConfig::min_level;
-    static constexpr auto buffer_size = LogConfig::buffer_size;
+    [[maybe_unused]] static constexpr auto min_level = LogConfig::min_level;
+    [[maybe_unused]] static constexpr auto buffer_size = LogConfig::buffer_size;
     using Exception = ProjectError;
 };
 
+// NOLINTNEXTLINE(bugprone-throwing-static-initialization): runtime initialization is what this config tests.
 const bool NonConstantSourceLocationConfig::show_source_location =
     runtime_config_value(LogConfig::show_source_location);
 
@@ -254,7 +255,7 @@ struct LargeBufferLogConfig {
 struct InvalidLogLevelConfig {
     static constexpr auto show_source_location = false;
     static constexpr auto min_level = static_cast<LogLevel>(255);
-    static constexpr auto buffer_size = LogConfig::buffer_size;
+    [[maybe_unused]] static constexpr auto buffer_size = LogConfig::buffer_size;
     using Exception = ProjectError;
 };
 
@@ -262,10 +263,11 @@ struct InvalidLogLevelConfig {
 struct NonConstantLogLevelConfig {
     static constexpr auto show_source_location = false;
     static const LogLevel min_level;
-    static constexpr auto buffer_size = LogConfig::buffer_size;
+    [[maybe_unused]] static constexpr auto buffer_size = LogConfig::buffer_size;
     using Exception = ProjectError;
 };
 
+// NOLINTNEXTLINE(bugprone-throwing-static-initialization): runtime initialization is what this config tests.
 const LogLevel NonConstantLogLevelConfig::min_level = runtime_config_value(LogConfig::min_level);
 
 // A log record needs at least one byte for its terminating newline.
@@ -284,6 +286,7 @@ struct NonConstantBufferLogConfig {
     using Exception = ProjectError;
 };
 
+// NOLINTNEXTLINE(bugprone-throwing-static-initialization): runtime initialization is what this config tests.
 const std::size_t NonConstantBufferLogConfig::buffer_size = runtime_config_value(LogConfig::buffer_size);
 
 // Owned copy of a delivered record, because receivers only borrow the message.

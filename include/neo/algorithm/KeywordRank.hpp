@@ -108,7 +108,7 @@ inline auto build_cooccurrence_graph(const CandidateTable &table, size_t window,
     }
     auto node_count = size_t{0};
     for (auto rank = size_t{0}; rank < candidate_count; ++rank) {
-        node_count += scratch.edge_begin[rank + 1] > 0 ? 1 : 0;
+        node_count += scratch.edge_begin[rank + 1] > 0 ? size_t{1} : size_t{0};
         scratch.edge_begin[rank + 1] += scratch.edge_begin[rank];
     }
     return node_count;

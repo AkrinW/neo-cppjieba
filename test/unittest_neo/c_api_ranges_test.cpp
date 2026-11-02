@@ -123,7 +123,7 @@ TEST_F(CApiRangesTest, EmptyInputIntoProducesEmptyRangesInEveryMode) {
                   NEO_JIEBA_V1_OK);
         const auto data = borrow_ranges(ranges);
         EXPECT_EQ(data.ranges, nullptr);
-        EXPECT_EQ(data.count, 0);
+        EXPECT_EQ(data.count, 0U);
     }
 }
 
@@ -153,8 +153,8 @@ TEST_F(CApiRangesTest, FailedCutIntoLeavesRangesEmpty) {
     EXPECT_EQ(neo_jieba_v1_cut_utf8_into(engine.get(), invalid.data(), invalid.size(), NEO_JIEBA_V1_MIX,
                                          workspace.get(), ranges.get(), &error),
               NEO_JIEBA_V1_OPERATION_FAILED);
-    EXPECT_GT(error.message_size, 0);
-    EXPECT_EQ(borrow_ranges(ranges).count, 0);
+    EXPECT_GT(error.message_size, 0U);
+    EXPECT_EQ(borrow_ranges(ranges).count, 0U);
 }
 
 TEST_F(CApiRangesTest, CutIntoRejectsMissingHandlesAndUnknownModes) {
@@ -164,7 +164,7 @@ TEST_F(CApiRangesTest, CutIntoRejectsMissingHandlesAndUnknownModes) {
               NEO_JIEBA_V1_OK);
     EXPECT_EQ(neo_jieba_v1_cut_utf8_into(engine.get(), "x", 1, 0, workspace.get(), ranges.get(), &error),
               NEO_JIEBA_V1_INVALID_ARGUMENT);
-    EXPECT_EQ(borrow_ranges(ranges).count, 0);
+    EXPECT_EQ(borrow_ranges(ranges).count, 0U);
     EXPECT_EQ(neo_jieba_v1_cut_utf8_into(nullptr, "x", 1, NEO_JIEBA_V1_MIX, workspace.get(), ranges.get(), &error),
               NEO_JIEBA_V1_INVALID_ARGUMENT);
     EXPECT_EQ(
@@ -182,16 +182,16 @@ TEST_F(CApiRangesTest, OversizeInputIntoIsRejectedBeforeReadingItsBytes) {
     EXPECT_EQ(neo_jieba_v1_cut_utf8_into(engine.get(), "x", neo_jieba_v1_max_input_bytes() + 1, NEO_JIEBA_V1_MP,
                                          workspace.get(), ranges.get(), &error),
               NEO_JIEBA_V1_LIMIT_EXCEEDED);
-    EXPECT_EQ(borrow_ranges(ranges).count, 0);
+    EXPECT_EQ(borrow_ranges(ranges).count, 0U);
 }
 
 TEST_F(CApiRangesTest, RangesBorrowRejectsMissingArgumentsAndZeroesOutput) {
     const auto ranges = make_ranges();
     const auto stale = neo_jieba_token_range_v1{1, 2};
-    auto data = neo_jieba_borrowed_ranges_v1{&stale, 1};
+    auto data = neo_jieba_borrowed_ranges_v1{&stale, 1, nullptr};
     EXPECT_EQ(neo_jieba_v1_ranges_borrow_data(nullptr, &data, &error), NEO_JIEBA_V1_INVALID_ARGUMENT);
     EXPECT_EQ(data.ranges, nullptr);
-    EXPECT_EQ(data.count, 0);
+    EXPECT_EQ(data.count, 0U);
     EXPECT_EQ(neo_jieba_v1_ranges_borrow_data(ranges.get(), nullptr, &error), NEO_JIEBA_V1_INVALID_ARGUMENT);
 }
 
@@ -264,7 +264,7 @@ TEST_F(CApiRangesTest, UntaggedFillClearsTagsOfAnEarlierTaggedFill) {
                                          ranges.get(), &error),
               NEO_JIEBA_V1_OK);
     const auto data = borrow_ranges(ranges);
-    EXPECT_EQ(data.count, 1);
+    EXPECT_EQ(data.count, 1U);
     EXPECT_EQ(data.tags, nullptr);
 }
 
@@ -281,7 +281,7 @@ TEST_F(CApiRangesTest, FailedTaggedCutIntoLeavesBothArraysEmpty) {
               NEO_JIEBA_V1_OPERATION_FAILED);
     const auto data = borrow_ranges(ranges);
     EXPECT_EQ(data.ranges, nullptr);
-    EXPECT_EQ(data.count, 0);
+    EXPECT_EQ(data.count, 0U);
     EXPECT_EQ(data.tags, nullptr);
 }
 
@@ -321,7 +321,7 @@ TEST_F(CApiRangesTest, InvalidUtf8WordFailsAndZeroesTheTag) {
     EXPECT_EQ(neo_jieba_v1_lookup_tag(engine.get(), word.data(), word.size(), &tag, &error),
               NEO_JIEBA_V1_OPERATION_FAILED);
     EXPECT_EQ(tag_text(tag), "");
-    EXPECT_GT(error.message_size, 0);
+    EXPECT_GT(error.message_size, 0U);
 }
 
 } // namespace

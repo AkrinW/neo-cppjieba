@@ -24,7 +24,7 @@ select at least one library form.
 
 | Platform in CI | Shared library | Static library |
 | --- | --- | --- |
-| Linux x64/ARM64, GCC 15 | `libneo_cppjieba_c.so.1` | `libneo_cppjieba_c.a` |
+| Linux x64/ARM64, GCC 16 | `libneo_cppjieba_c.so.1` | `libneo_cppjieba_c.a` |
 | macOS ARM64, LLVM 23/libc++ | `libneo_cppjieba_c.1.dylib` | `libneo_cppjieba_c.a` |
 | Windows x64, MSVC 2026 | `neo_cppjieba_c.dll` and import library `neo_cppjieba_c.lib` | `neo_cppjieba_c_static.lib` |
 
@@ -213,6 +213,11 @@ New releases only add functions to ABI v1, so programs built against an earlier
 release keep running. On Linux, functions added after 1.2.0 carry the
 `NEO_CPPJIEBA_C_1.1` symbol version: a program that uses them reports the missing
 version when loaded against an older library, before any call runs.
+
+Two checks keep that promise. `test/unittest_neo/c_api_abi_v1.c` freezes every v1
+type, layout, numeric value and function type at compile time on each platform, and
+`tools/check-c-abi.sh` runs libabigail's `abidiff` against the latest release on Linux,
+failing when a released symbol or public type changes.
 
 The macOS build searches beside the selected compiler, following the Homebrew LLVM
 layout in CI. Set `CPPJIEBA_C_API_LIBCXX`, `CPPJIEBA_C_API_LIBCXXABI` and

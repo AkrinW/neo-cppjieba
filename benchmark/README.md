@@ -79,6 +79,23 @@ the correctness tests and standalone benchmark.
 FileIO correctness is covered by `test/unittest_neo/fileio_test.cpp`.
 The standalone benchmark validates its inputs and reports timing observations.
 
+## Instruction counts
+
+Timings on shared CI runners vary by several percent; instruction counts do not.
+`instruction_workload` runs one phase per invocation — `load`, `snapshot_load`, `cut` (every mode),
+`tag` or `keywords` — over the repository dictionaries and `weicheng.utf8`, and each phase lives in its
+own `measure_<phase>` function, so callgrind can count it alone:
+
+```sh
+tools/instruction-counts.sh build-instructions origin/master
+```
+
+The script builds the current workload source with `-O2` against the baseline's and the current headers,
+counts each phase with `valgrind --tool=callgrind --toggle-collect`, and writes a table to
+`build-instructions/summary.md`. A baseline that lacks the measured API is reported and skipped. Counts
+repeat exactly between runs, so any change comes from the code or the compiler; the Quality workflow
+publishes the table for every pull request without enforcing a threshold.
+
 ## GitHub Actions
 
 The [build guide](../docs/building.md) describes the platform and unit-test matrix.
@@ -90,7 +107,7 @@ neo C++, Rust and Python through `python_compare_benchmark.py`. The `Rust=OFF` j
 checks the standalone C++ benchmark configuration.
 
 All four implementations run serially on one allowed CPU of the same runner,
-using the common dictionary and HMM model. CI uses GCC 15, Rust 1.99.0 and Python
+using the common dictionary and HMM model. CI uses GCC 16, Rust 1.99.0 and Python
 3.14.8; comparison dependencies are pinned by submodule revisions and `Cargo.lock`.
 
 | Corpus | Rounds per sample | Samples |

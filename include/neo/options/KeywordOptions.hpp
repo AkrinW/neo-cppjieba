@@ -16,7 +16,7 @@ inline constexpr auto python_textrank_tags = std::array{pos::ns, pos::n, pos::vn
 // An empty allowed_tags keeps every word, as CppJieba does. Otherwise only words whose tag is listed
 // become candidates, like Python jieba's allowPOS; tags come from Jieba::lookup_tag.
 struct TfIdfOptions {
-    std::vector<PosTag> allowed_tags;
+    std::vector<PosTag> allowed_tags{};
 };
 
 // CppJieba's TextRank defaults. Each candidate word links to the next window - 1 candidate words,
@@ -25,7 +25,7 @@ struct TextRankOptions {
     size_t window{5};
     size_t iterations{10};
     double damping{0.85};
-    std::vector<PosTag> allowed_tags;
+    std::vector<PosTag> allowed_tags{};
 };
 
 namespace detail {

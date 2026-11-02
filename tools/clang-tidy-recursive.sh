@@ -137,11 +137,17 @@ snapshot_hash() {
 }
 
 # Shared clang-tidy arguments; an empty GCC_TOOLCHAIN uses the compiler's default C++ standard library.
+# CLANG_TIDY_CHECKS, when set, is passed as --checks to every run, e.g. to run only the slower analyzer checks.
 set_tidy_args() {
+    CHECK_ARGS=()
+    if [[ -n "${CLANG_TIDY_CHECKS:-}" ]]; then
+        CHECK_ARGS=(--checks="${CLANG_TIDY_CHECKS}")
+    fi
     SOURCE_ARGS=(
         -quiet
         -p "${BUILD_DIR}"
         --header-filter="${HEADER_FILTER}"
+        "${CHECK_ARGS[@]}"
     )
     HEADER_COMPILER_ARGS=(
         -x c++-header
@@ -198,6 +204,7 @@ run_header_tidy() {
             -quiet
             "${file}"
             --header-filter="${HEADER_FILTER}"
+            "${CHECK_ARGS[@]}"
         )
         if [[ "${mode}" == "fix" ]]; then
             args+=(--fix --format-style=file)
@@ -246,7 +253,7 @@ run_check() {
     if [[ ${#header_files[@]} -gt 0 ]]; then
         printf '%s\0' "${header_files[@]}" | xargs -0 -P "${JOBS}" -I{} \
             timeout "${PER_FILE_TIMEOUT}" "${CLANG_TIDY_BIN}" -quiet {} --header-filter="${HEADER_FILTER}" \
-            -- "${HEADER_COMPILER_ARGS[@]}" >>"${log_file}" 2>&1 || failed=1
+            "${CHECK_ARGS[@]}" -- "${HEADER_COMPILER_ARGS[@]}" >>"${log_file}" 2>&1 || failed=1
     fi
     cat "${log_file}"
 
@@ -276,7 +283,7 @@ main() {
     CLANG_TIDY_BIN=$(resolve_clang_tidy)
     BUILD_DIR=${BUILD_DIR:-${BUILD_DIR_DEFAULT}}
     # Set GCC_TOOLCHAIN to an empty value to use the compiler's default GCC installation.
-    GCC_TOOLCHAIN=${GCC_TOOLCHAIN-/home/cwang/dev1/gcc-15.2-o3}
+    GCC_TOOLCHAIN=${GCC_TOOLCHAIN-}
     MAX_PASSES=${MAX_PASSES:-${MAX_PASSES_DEFAULT}}
     PER_FILE_TIMEOUT=${PER_FILE_TIMEOUT:-${PER_FILE_TIMEOUT_DEFAULT}}
     JOBS=${JOBS:-$(nproc)}

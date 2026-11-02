@@ -59,4 +59,7 @@ if(NEO_TEST_HAS_UINT128)
     cppjieba_add_capacity_test(mixed128 "uint128_t" "std::uint8_t" "std::uint16_t" "std::uint64_t" capacity_test.cpp)
     cppjieba_add_capacity_test(trie_128 "std::uint32_t" "std::uint32_t" "std::uint32_t"
         "uint128_t" trie_capacity_test.cpp)
+    # Clang reports every subscript with a 128-bit RuneIndex as a conversion to size_t; the index never exceeds
+    # the size of the span it subscripts, so these variants would otherwise warn on each rune access.
+    # detail::to_index makes those conversions explicit, so the variants keep every conversion warning.
 endif()

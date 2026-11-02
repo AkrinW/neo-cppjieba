@@ -4,6 +4,7 @@
 
 #include "test_paths.h"
 
+#include <array>
 #include <cstdint>
 #include <fstream>
 #include <iostream>
@@ -106,6 +107,18 @@ TEST(PosTagTest, Equality) {
     EXPECT_NE(PosTag{"n"}, PosTag{"nr"});
     EXPECT_EQ(PosTag{}, PosTag{});
     EXPECT_NE(PosTag{}, PosTag{"x"});
+}
+
+// Ordering follows the packed value, so ordered containers key tags without comparing strings.
+TEST(PosTagTest, OrderingFollowsThePackedValue) {
+    const auto tags = std::array{PosTag{}, PosTag{"n"}, PosTag{"nr"}, PosTag{"v"}, PosTag{"abcd"}};
+    for (const auto &left : tags) {
+        EXPECT_FALSE(left < left);
+        for (const auto &right : tags) {
+            EXPECT_EQ(left < right, left.raw() < right.raw());
+        }
+    }
+    EXPECT_EQ((std::set<PosTag>{PosTag{"n"}, PosTag{"v"}, PosTag{"n"}}.size()), 2U);
 }
 
 TEST(PosTagTest, CompareWithStringView) {

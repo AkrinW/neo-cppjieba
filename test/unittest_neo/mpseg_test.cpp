@@ -36,7 +36,7 @@ TEST(MPSegmentTest, SingleChar) {
     auto runes = decode(std::string_view{"我"});
     auto result = cut<MPSegment>(dict, unused_model(), runes);
     auto words = to_strings(runes, result);
-    ASSERT_EQ(words.size(), 1);
+    ASSERT_EQ(words.size(), 1U);
     EXPECT_EQ(words[0], "我");
 }
 
@@ -153,7 +153,7 @@ TEST(MPSegmentTest, AllSingleChars) {
     auto result = cut<MPSegment>(dict, unused_model(), runes);
     auto words = to_strings(runes, result);
 
-    ASSERT_EQ(words.size(), 3);
+    ASSERT_EQ(words.size(), 3U);
     EXPECT_EQ(words[0], "的");
     EXPECT_EQ(words[1], "了");
     EXPECT_EQ(words[2], "是");

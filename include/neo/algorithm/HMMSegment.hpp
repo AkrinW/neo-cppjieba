@@ -45,7 +45,7 @@ template <WordEmitter Emit>
 inline auto hmm_internal_cut(const HMModel &model, std::span<const Rune> runes, RuneIndex begin, RuneIndex end,
                              RuneIndex pos, const Emit &emit_word, SegmentScratch &scratch) -> void {
     assert_check([&] { return begin < end && end <= runes.size(); }, "HMMSegment: invalid Viterbi rune range");
-    assert_check([&] { return runes.size() <= std::numeric_limits<RuneIndex>::max() - pos; },
+    assert_check([&] { return runes.size() <= static_cast<RuneIndex>(std::numeric_limits<RuneIndex>::max() - pos); },
                  "HMMSegment: global word offsets overflow");
     constexpr auto Y = kHMMStatesNum; // 4 states: B, E, M, S
     const auto X = static_cast<size_t>(end - begin);
@@ -65,7 +65,7 @@ inline auto hmm_internal_cut(const HMModel &model, std::span<const Rune> runes, 
     const auto path = std::span{scratch.hmm_path}.first(X);
 
     // ── Initialization (t = 0) ──────────────────────────────────────
-    const auto first_emit = model.get_emit_probs(runes[begin]);
+    const auto first_emit = model.get_emit_probs(runes[to_index(begin)]);
     for (auto y = size_t{0}; y < Y; ++y) {
         previous_weight[y] = model.get_start_prob(static_cast<HMMState>(y)) + first_emit[y];
         assert_check([&] { return std::isfinite(previous_weight[y]); }, "HMMSegment: non-finite initial weight");
@@ -74,7 +74,7 @@ inline auto hmm_internal_cut(const HMModel &model, std::span<const Rune> runes, 
 
     // ── Recursion (t = 1 .. X-1) ────────────────────────────────────
     for (auto x = size_t{1}; x < X; ++x) {
-        const auto emit_probs = model.get_emit_probs(runes[begin + x]);
+        const auto emit_probs = model.get_emit_probs(runes[to_index(begin + x)]);
         for (auto y = size_t{0}; y < Y; ++y) {
             const auto emit = emit_probs[y];
             // CppJieba floors scores at MIN_DOUBLE and defaults to the E predecessor. When every candidate
@@ -144,7 +144,7 @@ inline auto hmm_internal_cut(const HMModel &model, std::span<const Rune> runes, 
         }
         if (state == HMMState::E || state == HMMState::S) {
             emit_word(WordRange{static_cast<RuneIndex>(pos + word_begin), static_cast<RuneIndex>(pos + begin + i + 1)});
-            word_begin = begin + static_cast<RuneIndex>(i) + 1;
+            word_begin = static_cast<RuneIndex>(begin + static_cast<RuneIndex>(i) + 1);
         }
     }
     assert_check([&] { return word_begin == end; }, "HMMSegment: words must cover the entire Viterbi range");
@@ -155,20 +155,20 @@ inline auto hmm_internal_cut(const HMModel &model, std::span<const Rune> runes, 
 [[nodiscard]] constexpr auto sequential_letter_end(std::span<const Rune> runes, RuneIndex begin, RuneIndex end) noexcept
     -> RuneIndex {
     assert_check([&] { return begin < end && end <= runes.size(); }, "HMMSegment: invalid ASCII letter range");
-    auto r = runes[begin];
+    auto r = runes[to_index(begin)];
     if (('a' > r || r > 'z') && ('A' > r || r > 'Z')) {
         return begin;
     }
     auto pos = begin + 1;
     while (pos < end) {
-        r = runes[pos];
+        r = runes[static_cast<size_t>(pos)];
         if (('a' <= r && r <= 'z') || ('A' <= r && r <= 'Z') || ('0' <= r && r <= '9')) {
             ++pos;
         } else {
             break;
         }
     }
-    return pos;
+    return static_cast<RuneIndex>(pos);
 }
 
 /// Find the end position of a consecutive number sequence starting at `begin`.
@@ -176,20 +176,20 @@ inline auto hmm_internal_cut(const HMModel &model, std::span<const Rune> runes, 
 [[nodiscard]] constexpr auto number_end(std::span<const Rune> runes, RuneIndex begin, RuneIndex end) noexcept
     -> RuneIndex {
     assert_check([&] { return begin < end && end <= runes.size(); }, "HMMSegment: invalid ASCII number range");
-    auto r = runes[begin];
+    auto r = runes[to_index(begin)];
     if ('0' > r || r > '9') {
         return begin;
     }
     auto pos = begin + 1;
     while (pos < end) {
-        r = runes[pos];
+        r = runes[static_cast<size_t>(pos)];
         if (('0' <= r && r <= '9') || r == '.') {
             ++pos;
         } else {
             break;
         }
     }
-    return pos;
+    return static_cast<RuneIndex>(pos);
 }
 
 // Emit the reference HMM's alternating alphanumeric matches and non-Chinese gaps.
@@ -198,12 +198,12 @@ inline auto style_hmm_emit_non_han(std::span<const Rune> runes, RuneIndex pos, c
     auto begin = RuneIndex{0};
     while (begin < runes.size()) {
         auto end = begin;
-        if (is_ascii_alphanumeric(runes[begin])) {
+        if (is_ascii_alphanumeric(runes[to_index(begin)])) {
             end = style_hmm_ascii_end(runes, begin);
         } else {
             do {
                 ++end;
-            } while (end < runes.size() && !is_ascii_alphanumeric(runes[end]));
+            } while (end < runes.size() && !is_ascii_alphanumeric(runes[to_index(end)]));
         }
         emit_word(WordRange{static_cast<RuneIndex>(pos + begin), static_cast<RuneIndex>(pos + end)});
         begin = end;
@@ -216,13 +216,13 @@ inline auto style_hmm_emit(const HMModel &model, std::span<const Rune> runes, Ru
                            SegmentScratch &scratch) -> void {
     auto begin = RuneIndex{0};
     while (begin < runes.size()) {
-        const auto han = is_hmm_han(runes[begin]);
+        const auto han = is_hmm_han(runes[to_index(begin)]);
         auto end = static_cast<RuneIndex>(begin + 1);
-        while (end < runes.size() && is_hmm_han(runes[end]) == han) {
+        while (end < runes.size() && is_hmm_han(runes[to_index(end)]) == han) {
             ++end;
         }
         if (!han) {
-            style_hmm_emit_non_han(runes.subspan(begin, end - begin), pos + begin, emit_word);
+            style_hmm_emit_non_han(runes.subspan(to_index(begin), to_index(end - begin)), pos + begin, emit_word);
         } else if (end - begin == 1) {
             emit_word(WordRange{static_cast<RuneIndex>(pos + begin), static_cast<RuneIndex>(pos + end)});
         } else {
@@ -236,7 +236,7 @@ inline auto style_hmm_emit(const HMModel &model, std::span<const Rune> runes, Ru
 template <WordEmitter Emit>
 inline auto hmm_emit_one_segment(const HMModel &model, std::span<const Rune> runes, RuneIndex pos,
                                  const Emit &emit_word, SegmentScratch &scratch) -> void {
-    assert_check([&] { return runes.size() <= std::numeric_limits<RuneIndex>::max() - pos; },
+    assert_check([&] { return runes.size() <= static_cast<RuneIndex>(std::numeric_limits<RuneIndex>::max() - pos); },
                  "HMMSegment: global word offsets overflow");
     if (runes.empty()) {
         return;
@@ -252,7 +252,7 @@ inline auto hmm_emit_one_segment(const HMModel &model, std::span<const Rune> run
 
         while (right < n) {
             assert_check([&] { return left <= right; }, "HMMSegment: pending rune range is reversed");
-            if (runes[right] < 0x80) {
+            if (runes[to_index(right)] < 0x80) {
                 // Flush pending Chinese characters to HMM before handling ASCII.
                 if (left < right) {
                     hmm_internal_cut(model, runes, left, right, pos, emit_word, scratch);
@@ -296,7 +296,7 @@ inline auto hmm_cut_one_segment(const HMModel &model, std::span<const Rune> rune
 /// Append HMM segmentation results; the CPP style also keeps separator runes as standalone tokens.
 inline auto hmm_cut_append(const HMModel &model, std::span<const Rune> runes, RuneIndex pos,
                            std::vector<WordRange> &range, SegmentScratch &scratch) -> void {
-    assert_check([&] { return runes.size() <= std::numeric_limits<RuneIndex>::max() - pos; },
+    assert_check([&] { return runes.size() <= static_cast<RuneIndex>(std::numeric_limits<RuneIndex>::max() - pos); },
                  "HMMSegment: global word offsets overflow");
     if constexpr (compile_config::segmentation_style != SegmentationStyle::CPP) {
         hmm_cut_one_segment(model, runes, pos, range, scratch);

@@ -1,10 +1,9 @@
 #include "neo/Utf.hpp"
 
+#include "CApiFuzzUtils.hpp"
 #include "FuzzUtils.hpp"
 #include "neo_cppjieba.h"
-#include "test_paths.h"
 
-#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <span>
@@ -13,26 +12,6 @@
 using namespace neo_cppjieba;
 
 namespace {
-
-constexpr auto modes = std::array<neo_jieba_mode_v1, 7>{
-    NEO_JIEBA_V1_MIX,           NEO_JIEBA_V1_MIX_NO_HMM, NEO_JIEBA_V1_FULL, NEO_JIEBA_V1_SEARCH,
-    NEO_JIEBA_V1_SEARCH_NO_HMM, NEO_JIEBA_V1_HMM,        NEO_JIEBA_V1_MP};
-
-// Full and search modes may emit overlapping ranges; every other mode tiles the input with adjacent ranges.
-auto tiles_input(neo_jieba_mode_v1 mode) -> bool {
-    return mode != NEO_JIEBA_V1_FULL && mode != NEO_JIEBA_V1_SEARCH && mode != NEO_JIEBA_V1_SEARCH_NO_HMM;
-}
-
-// Load the repository dictionaries once; libFuzzer runs every input in this process.
-auto engine() -> const neo_jieba_engine_v1 * {
-    static const auto *const owned = [] {
-        const auto paths = neo_jieba_paths_v1{DICT_DIR "/jieba.dict.utf8", DICT_DIR "/hmm_model.utf8", ""};
-        neo_jieba_engine_v1 *created = nullptr;
-        require(neo_jieba_v1_engine_create(&paths, &created, nullptr) == NEO_JIEBA_V1_OK, "engine_create failed");
-        return created;
-    }();
-    return owned;
-}
 
 // A result owns a copy of the input, and every range is a nonempty, well-formed UTF-8 slice of it.
 auto check_tokens(const neo_jieba_tokens_v1 *tokens, std::string_view input, neo_jieba_mode_v1 mode) -> void {
@@ -68,7 +47,8 @@ extern "C" auto LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t siz
     const auto input = as_text(data + 1, size - 1);
 
     neo_jieba_tokens_v1 *tokens = nullptr;
-    const auto status = neo_jieba_v1_cut_utf8_owned(engine(), input.data(), input.size(), mode, &tokens, nullptr);
+    const auto status =
+        neo_jieba_v1_cut_utf8_owned(repository_engine(), input.data(), input.size(), mode, &tokens, nullptr);
     if (!Utf::is_valid(input)) {
         require(status == NEO_JIEBA_V1_OPERATION_FAILED && tokens == nullptr, "invalid UTF-8 was not rejected");
         return 0;

@@ -34,7 +34,8 @@ inline constexpr auto is_debug_build = true;
 
 #if defined(__SIZEOF_INT128__)
 // Native 128-bit capacity storage on supporting targets; C++23 has no std::uint128_t.
-using uint128_t = unsigned __int128;
+// __extension__ marks the GNU type as intended, so -Wpedantic builds stay quiet.
+__extension__ using uint128_t = unsigned __int128;
 #endif
 
 namespace detail {
@@ -70,6 +71,14 @@ constexpr auto size_below_capacity(std::size_t size) noexcept -> bool {
     } else {
         return true;
     }
+}
+
+// Convert a rune position, or arithmetic on rune positions, to a container index. Positions never exceed the size of
+// the container they index, so the value is kept even when RuneIndex is wider than size_t, as with 128 bits.
+template <typename Index>
+    requires std::integral<Index> || CapacityInteger<Index>
+[[nodiscard]] constexpr auto to_index(Index position) noexcept -> std::size_t {
+    return static_cast<std::size_t>(position);
 }
 
 } // namespace detail

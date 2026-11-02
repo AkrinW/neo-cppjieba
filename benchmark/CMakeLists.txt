@@ -11,6 +11,7 @@ set(CPPJIEBA_BENCHMARK_TARGETS
     query_segment_benchmark
     fileio_benchmark
     load_benchmark
+    instruction_workload
 )
 foreach(benchmark IN LISTS CPPJIEBA_BENCHMARK_TARGETS)
     add_executable(${benchmark} ${benchmark}.cpp)

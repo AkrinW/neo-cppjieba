@@ -3,6 +3,7 @@
 #include "neo/Jieba.hpp"
 #include "neo/KeywordExtractor.hpp"
 #include "neo/Utf.hpp"
+#include "neo/value/DictSource.hpp"
 
 #include "test_paths.h"
 
@@ -191,6 +192,18 @@ TEST(KeywordExtractorTest, WorkspaceReuseMatchesFreshCalls) {
     workspace.release();
     tfidf.extract_into(small_jieba(), inputs[1], all, TfIdfOptions{}, out, workspace);
     EXPECT_EQ(format_keywords(out), format_keywords(tfidf.extract(small_jieba(), inputs[1], all, TfIdfOptions{})));
+}
+
+// Blank lines in an IDF table or a stop-word list define nothing and leave the average IDF unchanged.
+TEST(KeywordExtractorTest, BlankResourceLinesAreSkipped) {
+    const auto compact = TfIdfExtractor{DictSource::memory("世界 8.0\n你好 2.0\n"), DictSource::memory("而且\n")};
+    const auto spaced =
+        TfIdfExtractor{DictSource::memory("\n世界 8.0\n\n你好 2.0\n\n"), DictSource::memory("\n而且\n\n")};
+    constexpr auto text = std::string_view{"你好世界世界而且而且计算"};
+
+    const auto expected = compact.extract(small_jieba(), text, all, TfIdfOptions{});
+    EXPECT_TRUE(std::ranges::none_of(expected, [](const Keyword<char> &keyword) { return keyword.word == "而且"; }));
+    EXPECT_EQ(format_keywords(spaced.extract(small_jieba(), text, all, TfIdfOptions{})), format_keywords(expected));
 }
 
 TEST(KeywordExtractorTest, RejectsInvalidResources) {

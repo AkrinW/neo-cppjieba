@@ -462,7 +462,7 @@ struct SnapshotTrie {
 
 /// One section ready for the table: its kind, encoding, flags and payload.
 struct EncodedSnapshotSection {
-    SnapshotSection kind{};
+    SnapshotSection kind;
     std::uint16_t encoding{0};
     std::uint16_t flags{0};
     std::vector<std::byte> payload;

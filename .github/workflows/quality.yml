@@ -10,8 +10,10 @@ permissions:
   contents: read
 
 env:
-  # Preinstalled on ubuntu-26.04; format locally with the same clang-format major version.
-  LLVM_VERSION: "22"
+  # Each toolchain has one version: GCC from the Ubuntu archive, LLVM from apt.llvm.org. Clang jobs also install
+  # libstdc++ of this GCC, which Clang then prefers to the runner's GCC 15; format locally with clang-format 23.
+  GCC_VERSION: "16"
+  LLVM_VERSION: "23"
   # Package and GoogleTest discovery checks configure separate projects; the main CMake workflow runs them.
   CTEST_EXCLUDE: "^neo_(cpp_api_install|c_api_install|googletest_)"
 
@@ -21,6 +23,10 @@ jobs:
     runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v7
+      - name: Install clang-format
+        run: |
+          tools/add-llvm-apt-source.sh "$LLVM_VERSION"
+          sudo apt-get install -y "clang-format-$LLVM_VERSION"
       - name: Check formatting
         run: CLANG_FORMAT="clang-format-$LLVM_VERSION" tools/clang-format-recursive.sh --check
 
@@ -29,6 +35,10 @@ jobs:
     runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v7
+      - name: Install Clang and libstdc++
+        run: |
+          tools/add-llvm-apt-source.sh "$LLVM_VERSION"
+          sudo apt-get install -y "clang-$LLVM_VERSION" "libstdc++-$GCC_VERSION-dev"
       # Builds with BUILD_TESTING also compile each header alone through the neo_header_check target.
       - name: Check that each header compiles alone and templates find their callees
         run: CLANG_CXX="clang++-$LLVM_VERSION" tools/check-headers.sh
@@ -39,6 +49,10 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
+      - name: Install Clang, clang-tidy and libstdc++
+        run: |
+          tools/add-llvm-apt-source.sh "$LLVM_VERSION"
+          sudo apt-get install -y "clang-$LLVM_VERSION" "clang-tidy-$LLVM_VERSION" "libstdc++-$GCC_VERSION-dev"
       - name: Initialize comparison dependencies
         run: git submodule update --init deps/cppjieba deps/limonp deps/jieba-rs
       # Every optional component is configured so each checked source has a real compile command.
@@ -55,6 +69,36 @@ jobs:
           GCC_TOOLCHAIN: ""
         run: CLANG_TIDY="clang-tidy-$LLVM_VERSION" tools/clang-tidy-recursive.sh --check
 
+  # The path-sensitive analyzer is many times slower than the checks in .clang-tidy, so it runs here with a longer
+  # per-file timeout. Excluded: cplusplus.Move reports tests that reuse moved-from workspaces on purpose, which
+  # bugprone-use-after-move checks locally; optin.core.EnumCastOutOfRange reports deliberately invalid enum inputs.
+  analyzer:
+    name: clang-analyzer
+    runs-on: ubuntu-26.04
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install Clang, clang-tidy and libstdc++
+        run: |
+          tools/add-llvm-apt-source.sh "$LLVM_VERSION"
+          sudo apt-get install -y "clang-$LLVM_VERSION" "clang-tidy-$LLVM_VERSION" "libstdc++-$GCC_VERSION-dev"
+      - name: Initialize comparison dependencies
+        run: git submodule update --init deps/cppjieba deps/limonp deps/jieba-rs
+      - name: Configure the compilation database
+        run: >-
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
+          -DCMAKE_C_COMPILER="clang-$LLVM_VERSION" -DCMAKE_CXX_COMPILER="clang++-$LLVM_VERSION"
+          -DBUILD_TESTING=ON -DCPPJIEBA_BUILD_C_API=ON -DCPPJIEBA_BUILD_LEGACY_TESTS=ON
+          -DCPPJIEBA_BUILD_BENCHMARKS=ON -DCPPJIEBA_BUILD_RUST_BENCHMARKS=ON
+          -DCPPJIEBA_BUILD_EXAMPLES=ON -DCPPJIEBA_BUILD_FUZZERS=ON
+      - name: Run the clang static analyzer
+        env:
+          BUILD_DIR: ${{ github.workspace }}/build
+          GCC_TOOLCHAIN: ""
+          CLANG_TIDY_CHECKS: -*,clang-analyzer-*,-clang-analyzer-cplusplus.Move,-clang-analyzer-optin.core.EnumCastOutOfRange
+          PER_FILE_TIMEOUT: "900"
+        run: CLANG_TIDY="clang-tidy-$LLVM_VERSION" tools/clang-tidy-recursive.sh --check
+
   sanitizers:
     name: GCC ${{ matrix.name }}
     runs-on: ubuntu-26.04
@@ -63,9 +107,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # libstdc++ assertions bounds-check containers, spans and views without changing the library ABI.
           - name: ASan + UBSan
             artifact: asan-ubsan
-            flags: -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer
+            flags: >-
+              -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer
+              -D_GLIBCXX_ASSERTIONS
           - name: TSan
             artifact: tsan
             flags: -O1 -g -fsanitize=thread -fno-omit-frame-pointer
@@ -78,13 +125,15 @@ jobs:
       TSAN_OPTIONS: halt_on_error=1:second_deadlock_stack=1
     steps:
       - uses: actions/checkout@v7
+      - name: Install GCC
+        run: sudo apt-get update && sudo apt-get install -y "gcc-$GCC_VERSION" "g++-$GCC_VERSION"
       - name: Limit ASLR entropy to what sanitizer shadow memory supports
         run: sudo sysctl vm.mmap_rnd_bits=28
       # GCC links its sanitizer runtimes dynamically, so the shared C ABI keeps -z defs and is tested too.
       - name: Configure
         run: >-
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
-          -DCMAKE_C_COMPILER=gcc-15 -DCMAKE_CXX_COMPILER=g++-15
+          -DCMAKE_C_COMPILER="gcc-$GCC_VERSION" -DCMAKE_CXX_COMPILER="g++-$GCC_VERSION"
           "-DCMAKE_C_FLAGS=${{ matrix.flags }}" "-DCMAKE_CXX_FLAGS=${{ matrix.flags }}"
           -DBUILD_TESTING=ON -DCPPJIEBA_BUILD_C_API=ON
           -DCPPJIEBA_C_API_BUILD_SHARED=ON -DCPPJIEBA_C_API_BUILD_STATIC=ON
@@ -105,12 +154,117 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  # Every target, capacity variants included, treats warnings as errors with both compilers.
+  warnings:
+    name: ${{ matrix.name }} warnings as errors
+    runs-on: ubuntu-26.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {name: GCC, compiler: gcc, extra_flags: ""}
+          # Clang names the tests' deliberate double-to-float comparisons -Wimplicit-float-conversion.
+          - {name: Clang, compiler: clang, extra_flags: -Wno-implicit-float-conversion}
+    env:
+      # Tests compare double weights at float precision through EXPECT_FLOAT_EQ on purpose.
+      WARNING_FLAGS: >-
+        -Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion -Wshadow -Wno-float-conversion ${{ matrix.extra_flags }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install GCC
+        if: matrix.compiler == 'gcc'
+        run: sudo apt-get update && sudo apt-get install -y "gcc-$GCC_VERSION" "g++-$GCC_VERSION"
+      - name: Install Clang and libstdc++
+        if: matrix.compiler == 'clang'
+        run: |
+          tools/add-llvm-apt-source.sh "$LLVM_VERSION"
+          sudo apt-get install -y "clang-$LLVM_VERSION" "libstdc++-$GCC_VERSION-dev"
+      # GoogleTest builds from source, so its templates are checked where our tests instantiate them.
+      - name: Configure
+        run: |
+          if [ "${{ matrix.compiler }}" = gcc ]; then cc="gcc-$GCC_VERSION" cxx="g++-$GCC_VERSION"; else cc="clang-$LLVM_VERSION" cxx="clang++-$LLVM_VERSION"; fi
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_C_COMPILER="$cc" -DCMAKE_CXX_COMPILER="$cxx" \
+            "-DCMAKE_C_FLAGS=$WARNING_FLAGS" "-DCMAKE_CXX_FLAGS=$WARNING_FLAGS" -DCMAKE_COMPILE_WARNING_AS_ERROR=ON \
+            -DCMAKE_DISABLE_FIND_PACKAGE_GTest=ON \
+            -DBUILD_TESTING=ON -DCPPJIEBA_BUILD_C_API=ON \
+            -DCPPJIEBA_C_API_BUILD_SHARED=ON -DCPPJIEBA_C_API_BUILD_STATIC=ON
+      # Keep going after a failure so one run reports every warning.
+      - name: Build
+        run: cmake --build build --parallel 4 -- -k 0
+      - name: Test unit, C ABI and fuzz corpus replays
+        run: ctest --test-dir build -E "$CTEST_EXCLUDE" --no-tests=error --output-on-failure --parallel 4
+
+  # Truncating or sign-changing implicit integer conversions in this repository's code abort the test reaching them.
+  implicit-conversions:
+    name: Clang implicit conversions
+    runs-on: ubuntu-26.04
+    timeout-minutes: 45
+    env:
+      UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+      # The ignorelist skips standard library templates, which convert between char types and sizes on purpose.
+      SANITIZE_FLAGS: >-
+        -O1 -g -fsanitize=implicit-conversion -fno-sanitize-recover=all -fno-omit-frame-pointer
+        -fsanitize-ignorelist=${{ github.workspace }}/tools/implicit-conversion.ignorelist
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install Clang and libstdc++
+        run: |
+          tools/add-llvm-apt-source.sh "$LLVM_VERSION"
+          sudo apt-get install -y "clang-$LLVM_VERSION" "libclang-rt-$LLVM_VERSION-dev" "libstdc++-$GCC_VERSION-dev"
+      # Clang links the sanitizer runtime only into executables, which the shared C ABI's -z defs rejects,
+      # so the static C ABI library carries the C ABI tests here.
+      - name: Configure
+        run: >-
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
+          -DCMAKE_C_COMPILER="clang-$LLVM_VERSION" -DCMAKE_CXX_COMPILER="clang++-$LLVM_VERSION"
+          "-DCMAKE_C_FLAGS=$SANITIZE_FLAGS" "-DCMAKE_CXX_FLAGS=$SANITIZE_FLAGS"
+          -DBUILD_TESTING=ON -DCPPJIEBA_BUILD_C_API=ON
+          -DCPPJIEBA_C_API_BUILD_SHARED=OFF -DCPPJIEBA_C_API_BUILD_STATIC=ON
+      - name: Build
+        run: cmake --build build --parallel 4
+      - name: Test unit, C ABI and fuzz corpus replays
+        run: ctest --test-dir build -E "$CTEST_EXCLUDE" --no-tests=error --output-on-failure --parallel 4
+
+  # libc++ debug hardening checks bounds, iterator validity and preconditions that libstdc++ assertions do not.
+  libcxx-hardening:
+    name: Clang libc++ hardening
+    runs-on: ubuntu-26.04
+    timeout-minutes: 45
+    env:
+      LIBCXX_FLAGS: -O1 -g -stdlib=libc++ -D_LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_DEBUG
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install Clang and libc++
+        run: |
+          tools/add-llvm-apt-source.sh "$LLVM_VERSION"
+          sudo apt-get install -y "clang-$LLVM_VERSION" "libc++-$LLVM_VERSION-dev" "libc++abi-$LLVM_VERSION-dev"
+      # GoogleTest is built from source against libc++. The shared C ABI bundles the GNU C++ runtime on Linux,
+      # so the static C ABI library carries the C ABI tests here.
+      - name: Configure
+        run: >-
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
+          -DCMAKE_C_COMPILER="clang-$LLVM_VERSION" -DCMAKE_CXX_COMPILER="clang++-$LLVM_VERSION"
+          "-DCMAKE_CXX_FLAGS=$LIBCXX_FLAGS" -DCMAKE_EXE_LINKER_FLAGS=-stdlib=libc++
+          -DCMAKE_DISABLE_FIND_PACKAGE_GTest=ON
+          -DBUILD_TESTING=ON -DCPPJIEBA_BUILD_C_API=ON
+          -DCPPJIEBA_C_API_BUILD_SHARED=OFF -DCPPJIEBA_C_API_BUILD_STATIC=ON
+      - name: Build
+        run: cmake --build build --parallel 4
+      - name: Test unit, C ABI and fuzz corpus replays
+        run: ctest --test-dir build -E "$CTEST_EXCLUDE" --no-tests=error --output-on-failure --parallel 4
+
   fuzz:
     name: libFuzzer
     runs-on: ubuntu-26.04
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v7
+      - name: Install Clang, LLVM tools and libstdc++
+        run: |
+          tools/add-llvm-apt-source.sh "$LLVM_VERSION"
+          sudo apt-get install -y "clang-$LLVM_VERSION" "libclang-rt-$LLVM_VERSION-dev" "llvm-$LLVM_VERSION" "libstdc++-$GCC_VERSION-dev"
       # Debug keeps library assertions fatal; -O1 keeps the execution rate useful.
       - name: Configure
         run: >-
@@ -119,8 +273,23 @@ jobs:
           -DBUILD_TESTING=OFF -DCPPJIEBA_BUILD_FUZZERS=ON
       - name: Build
         run: cmake --build build --parallel 4
-      - name: Fuzz each target for 60 seconds
-        run: tools/fuzz.sh build 60
+      # Start from the corpus the latest master or nightly run kept; pull requests only read it.
+      - name: Restore the fuzz corpus
+        uses: actions/cache/restore@v6
+        with:
+          path: build/fuzz-run/corpus
+          key: fuzz-corpus-${{ github.run_id }}
+          restore-keys: fuzz-corpus-
+      - name: Fuzz each target for 30 seconds
+        env:
+          FUZZ_MINIMIZE: ${{ github.event_name != 'pull_request' && '1' || '' }}
+        run: tools/fuzz.sh build 30
+      - name: Save the fuzz corpus
+        if: github.event_name != 'pull_request'
+        uses: actions/cache/save@v6
+        with:
+          path: build/fuzz-run/corpus
+          key: fuzz-corpus-${{ github.run_id }}
       - name: Upload crash reproducers
         if: failure()
         uses: actions/upload-artifact@v7
@@ -130,12 +299,47 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  # Instruction counts are deterministic, unlike timings on shared runners; the report compares each phase.
+  instructions:
+    name: callgrind instruction counts
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The baseline is the pull request's target branch or the commit a push replaced.
+          fetch-depth: 0
+      - name: Install GCC and Valgrind
+        run: sudo apt-get update && sudo apt-get install -y "gcc-$GCC_VERSION" "g++-$GCC_VERSION" valgrind
+      - name: Count instructions against the baseline
+        env:
+          CXX: g++-${{ env.GCC_VERSION }}
+          BASELINE: >-
+            ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref)
+            || github.event.before || 'HEAD~1' }}
+        run: tools/instruction-counts.sh build-instructions "$BASELINE"
+      - name: Publish the instruction counts
+        if: always()
+        run: |
+          if [ -f build-instructions/summary.md ]; then
+            cat build-instructions/summary.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
   coverage:
     name: llvm-cov
     runs-on: ubuntu-26.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
+        with:
+          # Changed-line coverage diffs a pull request against the merge base with its target branch.
+          fetch-depth: 0
+      - name: Install Clang, LLVM tools and libstdc++
+        run: |
+          tools/add-llvm-apt-source.sh "$LLVM_VERSION"
+          sudo apt-get install -y "clang-$LLVM_VERSION" "libclang-rt-$LLVM_VERSION-dev" "llvm-$LLVM_VERSION" "libstdc++-$GCC_VERSION-dev"
+      - name: Check the coverage summary script
+        run: python3 -B -m unittest discover -s tools -p 'coverage_summary_test.py' -v
       # The shared C ABI links the profile runtime privately and writes its own profile, so both variants count.
       - name: Configure
         run: >-
@@ -148,18 +352,13 @@ jobs:
       - name: Build
         run: cmake --build build --parallel 4
       - name: Measure coverage
+        env:
+          COVERAGE_BASE: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || '' }}
         run: >-
           LLVM_PROFDATA="llvm-profdata-$LLVM_VERSION" LLVM_COV="llvm-cov-$LLVM_VERSION"
           tools/llvm-coverage.sh build coverage
       - name: Publish coverage summary
-        run: |
-          {
-            printf '## Coverage of include/neo and the C ABI adapter\n\n'
-            printf 'Report only; no threshold is enforced. HTML and lcov reports are in the coverage artifact.\n\n'
-            printf '```text\n'
-            cat coverage/summary.txt
-            printf '```\n'
-          } >> "$GITHUB_STEP_SUMMARY"
+        run: cat coverage/summary.md >> "$GITHUB_STEP_SUMMARY"
       - name: Upload coverage reports
         uses: actions/upload-artifact@v7
         with:
@@ -167,6 +366,7 @@ jobs:
           path: |
             coverage/html/
             coverage/coverage.lcov
+            coverage/summary.md
             coverage/summary.txt
           if-no-files-found: error
           retention-days: 14

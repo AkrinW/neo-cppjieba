@@ -28,6 +28,34 @@
 - 新增构建选项 `CPPJIEBA_BUILD_FUZZERS`（要求 Clang），构建 UTF 解码、主词典 / 用户词典 / HMM 模型解析和
   `neo_jieba_v1_cut_utf8_owned` 的 libFuzzer 目标；CI 增加格式、clang-tidy、sanitizer、fuzz 和覆盖率检查。
   见 [质量检查](docs/building.md#质量检查)。
+- 每个 fuzz 目标在 `BUILD_TESTING` 下另建 `neo_fuzz_replay_<目标>` 测试，用任意编译器回放 `test/fuzz/corpus/` 中
+  按边覆盖精简的语料，sanitizer 和覆盖率任务因此也运行这些输入；`tools/fuzz.sh` 从该语料出发。
+- 新增 C ABI fuzz 目标：`c_api_ranges` 对照独立结果和 `lookup_tag` 检查复用存储的区间与标注，
+  `c_api_sources` 对照 C++ API 检查内存源和快照的加载与分词，`c_api_edit` 在克隆引擎上随机增删词并 `compact`，
+  `c_api_keyword` 检查两种排序的参数校验、顺序、出现位置和标注；每次调用都检查错误缓冲区契约。
+- 新增 C++ fuzz 目标：`keyword` 从变异的 IDF 表和停用词构建提取器并检查结果，`snapshot_roundtrip` 检查快照编码确定，
+  且在全部模式下与源词典分词、标注一致，`utf_cut` 检查同一文本的 UTF-8 / UTF-16 / UTF-32 输入分词、标注一致，
+  源偏移落在各自的码元上。
+- Fuzz CI 在运行之间缓存并精简语料，并按输入格式使用 libFuzzer 字典；PR 与 master 每个目标 fuzz 30 秒，
+  新增的 Nightly fuzz 工作流每天为每个目标并行 fuzz 10 分钟。`tools/fuzz.sh` 增加 `--list`、`FUZZ_FORK` 和 `FUZZ_MINIMIZE`。
+- ASan + UBSan 任务启用 `-D_GLIBCXX_ASSERTIONS`，检查标准库容器、span 和视图的越界访问。
+- C ABI 兼容性检查：`c_api_abi_v1.c` 在各平台编译期冻结 v1 的类型、布局、数值和函数类型；C API 工作流用
+  `tools/check-c-abi.sh` 调用 libabigail 的 `abidiff` 与最新发布版比较，已发布符号或公开类型变化时失败。
+- Quality 工作流新增 GCC 与 Clang 警告即错误任务（`-Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion -Wshadow`），
+  覆盖全部容量变体；窄容量下原本隐式的缩窄转换改为显式，`-O3` 生成的机器码不变。
+  为此 `TfIdfOptions` / `TextRankOptions` 的 `allowed_tags` 增加默认成员初始化，指定初始化不再触发
+  `-Wmissing-field-initializers`；`uint128_t` 别名标为 `__extension__`，`-Wpedantic` 下不再告警。
+- clang-tidy 增加 `bugprone-*` 检查，另有 `clang-analyzer` 任务运行 Clang 静态分析器；`tools/clang-tidy-recursive.sh`
+  支持用 `CLANG_TIDY_CHECKS` 覆盖检查集。有意的写法以带理由的 `NOLINT` 标出，测试中的乘法改为显式宽度。
+- Quality 工作流新增 Clang + libc++ 任务，以 `_LIBCPP_HARDENING_MODE_DEBUG` 运行单元测试、C ABI 测试和 fuzz 语料回放，
+  检查越界、迭代器失效和标准库前置条件。
+- Quality 工作流新增 Clang 隐式整数转换检查：单元测试、C ABI 测试和 fuzz 语料回放在 `-fsanitize=implicit-conversion` 下运行，
+  本仓库代码中改变数值的截断或符号转换会使测试失败；标准库模板经 `tools/implicit-conversion.ignorelist` 排除。
+- 新增 `instruction_workload` 与 `tools/instruction-counts.sh`：用 callgrind 分别统计加载、快照加载、分词、标注和关键词提取的
+  指令数，Quality 工作流在 job summary 中报告与基准修订的差异。
+- 覆盖率任务在 job summary 中按行和分支汇总总计、各目录和覆盖最少的文件，PR 另报告改动行的覆盖；
+  统计取所有测试程序和模板实例的并集，只含右花括号的行随其前一可执行行计入，HTML 报告显示分支计数，
+  构建目录中生成的头文件不再计入。
 - C ABI v1 新增 25 个函数，已有符号、结构布局和函数语义不变。见 [C ABI](api/README.md#calls-and-ownership)。
   - 可复用的 workspace 和只含字节区间的结果：`neo_jieba_v1_cut_utf8_into` 把分词结果写成调用方原文中的
     字节区间，不复制原文，并复用 workspace 的临时存储和结果容量。
@@ -89,6 +117,8 @@
 - `PosTag` 和 `pos::` 常量移至 `neo/value/PosTag.hpp`，命名空间不变；`neo/Jieba.hpp` 仍包含它。
 - `with_source_text` 移入 `neo_cppjieba::detail`；用户词典单字集合改用 `gtl::flat_hash_set`，
   且无单字时跳过查询。
+- CI 每种工具链只用一个版本：Linux 任务从 Ubuntu 软件源安装 GCC 16，经 `tools/add-llvm-apt-source.sh` 从 apt.llvm.org
+  安装 LLVM 23，与 macOS 的 Homebrew LLVM 23 一致；Clang 任务同时安装 libstdc++ 16。
 
 ### Upgrade notes
 

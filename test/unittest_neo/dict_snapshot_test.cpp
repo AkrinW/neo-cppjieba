@@ -56,12 +56,6 @@ auto read_text(std::string_view path) -> std::string {
     return {std::istreambuf_iterator<char>{input}, std::istreambuf_iterator<char>{}};
 }
 
-auto read_bytes(std::string_view path) -> std::vector<std::byte> {
-    const auto text = read_text(path);
-    const auto bytes = std::as_bytes(std::span{text});
-    return {bytes.begin(), bytes.end()};
-}
-
 // Split text into its nonempty lines.
 auto lines_of(std::string_view text) -> std::vector<std::string_view> {
     auto lines = std::vector<std::string_view>{};
@@ -222,6 +216,19 @@ auto tiny_snapshot() -> std::vector<std::byte> {
                                                       UserWordWeightOption::WordWeightMedian));
 }
 
+// The tiny dictionary plus single-rune user words "c" and "d", stored in ascending order after a 64-bit count.
+auto single_rune_snapshot() -> std::vector<std::byte> {
+    const auto user_dicts = std::array{DictSource::memory("c\nd\n", "user")};
+    return encode_dict_snapshot(DictTrie::level_order(DictSource::memory("a 1 n\nab 2 v\nb 3 n\n", "tiny"), user_dicts,
+                                                      UserWordWeightOption::WordWeightMedian));
+}
+
+// Recompute the checksum after editing bytes it covers, so only the edit is under test.
+auto reseal_checksum(std::vector<std::byte> &bytes) -> void {
+    const auto header_size = load_le<std::uint32_t>(std::span{bytes}.subspan(12));
+    store_le(std::span{bytes}.subspan(kSnapshotV1ChecksumOffset), xxh64(std::span{bytes}.subspan(header_size), 0));
+}
+
 // Expect decoding to fail through the checked path with a message naming the problem.
 auto expect_rejected(std::span<const std::byte> bytes, std::string_view message) -> void {
     try {
@@ -240,7 +247,7 @@ TEST(SnapshotChecksumTest, MatchesReferenceXxh64) {
     };
     EXPECT_EQ(hash(""), 0xEF46DB3751D8E999);
     EXPECT_EQ(hash("a"), 0xD24EC4F1A98C6E5B);
-    EXPECT_EQ(hash("abc"), 0x44BC2CF5AD770999);
+    EXPECT_EQ(hash("abc"), 0x44BC2CF5AD770999ULL);
     // 39 bytes: one 32-byte stripe, then a 4-byte word and three single bytes.
     EXPECT_EQ(hash("Nobody inspects the spammish repetition"), 0xFBCEA83C8A378BF1);
 }
@@ -412,6 +419,29 @@ TEST(DictSnapshotTest, RejectsTruncatedSnapshot) {
     expect_rejected(bytes, "it may be truncated");
 }
 
+TEST(DictSnapshotTest, RejectsHeaderSizeOutsideTheFile) {
+    const auto file_size = tiny_snapshot().size();
+    for (const auto header_size : {kSnapshotV1HeaderSize - 1, file_size + 1}) {
+        auto bytes = tiny_snapshot();
+        store_le(std::span{bytes}.subspan(12), static_cast<std::uint32_t>(header_size));
+        expect_rejected(bytes, "records an invalid header size");
+    }
+}
+
+TEST(DictSnapshotTest, RejectsSectionOutsideTheFile) {
+    const auto first_entry = kSnapshotV1HeaderSize;
+    auto starts_past_end = tiny_snapshot();
+    store_le(std::span{starts_past_end}.subspan(first_entry + 8),
+             static_cast<std::uint64_t>(starts_past_end.size() + 1));
+    reseal_checksum(starts_past_end);
+    expect_rejected(starts_past_end, "lies outside the file");
+
+    auto ends_past_end = tiny_snapshot();
+    store_le(std::span{ends_past_end}.subspan(first_entry + 16), static_cast<std::uint64_t>(ends_past_end.size()));
+    reseal_checksum(ends_past_end);
+    expect_rejected(ends_past_end, "lies outside the file");
+}
+
 TEST(DictSnapshotTest, RejectsChecksumMismatch) {
     auto bytes = tiny_snapshot();
     bytes.back() ^= std::byte{1};
@@ -503,4 +533,21 @@ TEST(DictSnapshotTest, RejectsTrailingSectionBytes) {
     auto sections = split_sections(tiny_snapshot());
     section_of(sections, SnapshotSection::UserSingleRunes).payload.push_back(std::byte{0});
     expect_rejected(reseal(sections), "unexpected trailing bytes");
+}
+
+TEST(DictSnapshotTest, RejectsUnorderedSingleRuneUserWords) {
+    auto sections = split_sections(single_rune_snapshot());
+    auto &payload = section_of(sections, SnapshotSection::UserSingleRunes).payload;
+    ASSERT_EQ(payload.size(), sizeof(std::uint64_t) + 2 * sizeof(std::uint32_t));
+    store_le(std::span{payload}.subspan(8), static_cast<std::uint32_t>(U'd'));
+    store_le(std::span{payload}.subspan(12), static_cast<std::uint32_t>(U'c'));
+    expect_rejected(reseal(sections), "single-rune user words are not ascending Unicode scalars");
+}
+
+TEST(DictSnapshotTest, RejectsSurrogateSingleRuneUserWord) {
+    auto sections = split_sections(single_rune_snapshot());
+    auto &payload = section_of(sections, SnapshotSection::UserSingleRunes).payload;
+    ASSERT_EQ(payload.size(), sizeof(std::uint64_t) + 2 * sizeof(std::uint32_t));
+    store_le(std::span{payload}.subspan(8), std::uint32_t{0xD800});
+    expect_rejected(reseal(sections), "single-rune user words are not ascending Unicode scalars");
 }

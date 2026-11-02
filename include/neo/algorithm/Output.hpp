@@ -21,7 +21,7 @@ namespace neo_cppjieba::detail {
     -> SourceRange {
     assert_check([&] { return range.begin <= range.end && range.end < offsets.size(); },
                  "Jieba rune range exceeds its source offset table");
-    return {offsets[range.begin], offsets[range.end]};
+    return {offsets[to_index(range.begin)], offsets[to_index(range.end)]};
 }
 
 // Fill the caller's cleared output from validated ranges, retaining the output capacity.

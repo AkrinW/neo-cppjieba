@@ -44,6 +44,7 @@ static auto BenchOldMethod(const std::string &path, int iterations) -> std::chro
             // Simulate the same work DictTrie::LoadDict does: access all 3 fields
             if (buf.size() == 3) {
                 [[maybe_unused]] volatile auto *w = buf[0].data();
+                // NOLINTNEXTLINE(bugprone-unchecked-string-to-number-conversion): mirrors CppJieba's own parsing.
                 [[maybe_unused]] volatile auto f = std::atof(buf[1].c_str());
                 [[maybe_unused]] volatile auto *t = buf[2].data();
             }

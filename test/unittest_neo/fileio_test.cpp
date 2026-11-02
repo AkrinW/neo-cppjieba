@@ -90,6 +90,15 @@ TEST(StringUtilTest, EmptySeparatorInputResetsOutputToEndSentinel) {
     EXPECT_EQ(get_pre_filter_separators(runes), expected);
 }
 
+// The benchmark times three separator predicates; they must classify every rune alike to compare equal work.
+TEST(StringUtilTest, SeparatorVariantsAgreeOnEveryRune) {
+    for (auto rune = char32_t{0}; rune <= char32_t{0x110000}; ++rune) {
+        const auto expected = is_default_separator(rune);
+        ASSERT_EQ(is_default_separator_unlikely(rune), expected) << static_cast<std::uint32_t>(rune);
+        ASSERT_EQ(is_default_separator_branchless(rune), expected) << static_cast<std::uint32_t>(rune);
+    }
+}
+
 // ─── lines_view tests ────────────────────────────────────────────────────────
 
 TEST(LinesViewTest, BasicLines) {
@@ -183,6 +192,14 @@ TEST(LinesViewTest, OnlyNewlines) {
     EXPECT_EQ(result[1], "");
 }
 
+TEST(LinesViewTest, PostfixIncrementReturnsThePreviousLine) {
+    const auto lines = get_line_view(std::string_view{"first\nsecond\n"});
+    auto it = lines.begin();
+    const auto previous = it++;
+    EXPECT_EQ(*previous, "first");
+    EXPECT_EQ(*it, "second");
+}
+
 // ─── split_view tests ───────────────────────────────────────────────────────
 
 TEST(SplitViewTest, BasicSplit) {
@@ -264,6 +281,14 @@ TEST(SplitViewTest, DictLineFormat) {
     EXPECT_EQ(result[2], "v");
 }
 
+TEST(SplitViewTest, PostfixIncrementReturnsThePreviousField) {
+    const auto fields = get_split_view(std::string_view{"word 12 n"}, ' ');
+    auto it = fields.begin();
+    const auto previous = it++;
+    EXPECT_EQ(*previous, "word");
+    EXPECT_EQ(*it, "12");
+}
+
 // ─── FileBuffer tests ────────────────────────────────────────────────────────
 
 namespace {
@@ -321,7 +346,7 @@ TEST_F(FileBufferTest, MoveSemantics) {
     EXPECT_EQ(file2.size(), size1);
     EXPECT_EQ(file2.content(), content1);
     // Moved-from should be empty
-    EXPECT_EQ(file1.size(), 0u);
+    EXPECT_EQ(file1.size(), 0u); // NOLINT(bugprone-use-after-move): checks the moved-from state.
     EXPECT_FALSE(file1.is_open());
 }
 
@@ -455,7 +480,7 @@ TEST_F(FileBufferTest, MoveAssignmentTransfersBufferAndEmptiesSource) {
     EXPECT_TRUE(destination.is_open());
     EXPECT_EQ(destination.content(), "source content");
     EXPECT_EQ(destination.content().data(), content.data());
-    EXPECT_FALSE(source.is_open());
+    EXPECT_FALSE(source.is_open()); // NOLINT(bugprone-use-after-move): checks the moved-from state.
     EXPECT_EQ(source.size(), 0u);
     EXPECT_TRUE(source.content().empty());
 }

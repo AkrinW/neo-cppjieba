@@ -208,7 +208,7 @@ TEST(JiebaNeoTest, WorkspaceCutConvertsAnAdaptedViewOnce) {
     const auto input = ChangingTextView{};
     const auto tokens = test_jieba().cut_with_workspace(input, CutMode::MIX, workspace);
     EXPECT_EQ(copy_words(tokens), (std::vector<std::string>{"中国"}));
-    EXPECT_EQ(input.conversions, 1);
+    EXPECT_EQ(input.conversions, 1U);
 }
 
 TEST(JiebaNeoTest, WorkspaceCutRejectsInvalidTextAndRecovers) {
@@ -226,7 +226,7 @@ TEST(JiebaNeoTest, DirectCutUsesTheSameViewForDecodingAndCopying) {
     const auto input = ChangingTextView{};
     const auto tokens = test_jieba().cut(input, CutMode::MIX);
     EXPECT_EQ(copy_words(tokens), (std::vector<std::string>{"中国"}));
-    EXPECT_EQ(input.conversions, 1);
+    EXPECT_EQ(input.conversions, 1U);
 }
 
 TEST(JiebaNeoTest, PublicSourceEncodingStillRejectsInvalidOffsets) {
@@ -411,7 +411,7 @@ TEST(JiebaNeoTest, OwnedSmallTextSurvivesResultMove) {
     auto original = test_jieba().cut_owned(std::string{"中国"}, CutMode::MIX);
     const auto moved = std::move(original);
     EXPECT_EQ(moved.source(), "中国");
-    ASSERT_EQ(moved.size(), 1);
+    ASSERT_EQ(moved.size(), 1U);
     EXPECT_EQ(moved[0].word, "中国");
     EXPECT_EQ(moved[0].word.data(), moved.source().data());
 }
@@ -469,9 +469,9 @@ TEST(JiebaNeoTest, InvalidTextDoesNotInvokeVisitorAndWorkspaceCanRecover) {
     };
     EXPECT_THROW(test_jieba().cut_each(std::string_view{"中国\xE4\xB8"}, CutMode::MIX, count, buffer),
                  LogConfig::Exception);
-    EXPECT_EQ(calls, 0);
+    EXPECT_EQ(calls, 0U);
     test_jieba().cut_each("北京", CutMode::MIX, count, buffer);
-    EXPECT_EQ(calls, 1);
+    EXPECT_EQ(calls, 1U);
 }
 
 TEST(JiebaNeoTest, TextEntriesRejectMalformedUtfInEveryMode) {

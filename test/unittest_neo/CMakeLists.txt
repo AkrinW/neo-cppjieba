@@ -1,6 +1,7 @@
 add_executable(test_neo.run
     ../gtest_main.cpp
     unicode_test.cpp
+    char_class_test.cpp
     traits_test.cpp
     fwd_test.cpp
     concept_test.cpp

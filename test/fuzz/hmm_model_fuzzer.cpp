@@ -14,7 +14,7 @@ extern "C" auto LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t siz
     try {
         const auto model = detail::HMModel{DictSource::memory(as_text(data, size))};
         static_cast<void>(model);
-    } catch (const LogConfig::Exception &) {
+    } catch (const LogConfig::Exception &) { // NOLINT(bugprone-empty-catch): rejection is the expected outcome.
     }
     return 0;
 }

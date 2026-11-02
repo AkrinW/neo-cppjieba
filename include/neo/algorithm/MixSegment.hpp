@@ -32,11 +32,11 @@ inline auto mix_emit_route(const DictTrie &dict, const HMModel &model, std::span
         const auto &route = scratch.route;
         auto begin = RuneIndex{0};
         while (begin < runes.size()) {
-            const auto end = route[begin].next_pos;
+            const auto end = route[to_index(begin)].next_pos;
             assert(begin < end && end <= runes.size());
 
             // Multi-character word or user-dict single character → emit directly.
-            if (end - begin > 1 || dict.is_user_dict_single_chinese_word(runes[begin])) {
+            if (end - begin > 1 || dict.is_user_dict_single_chinese_word(runes[to_index(begin)])) {
                 emit(WordRange{begin, end});
                 begin = end;
                 continue;
@@ -44,12 +44,13 @@ inline auto mix_emit_route(const DictTrie &dict, const HMModel &model, std::span
 
             // Collect consecutive single-character words that are not user-dict words.
             auto run_end = end;
-            while (run_end < runes.size() && route[run_end].next_pos == run_end + 1
-                   && !dict.is_user_dict_single_chinese_word(runes[run_end])) {
+            while (run_end < runes.size() && route[to_index(run_end)].next_pos == run_end + 1
+                   && !dict.is_user_dict_single_chinese_word(runes[to_index(run_end)])) {
                 ++run_end;
             }
             // The outer cut already removed separators; HMM keeps its ASCII handling.
-            hmm_emit_one_segment(model, runes.subspan(begin, run_end - begin), begin, emit, scratch);
+            hmm_emit_one_segment(model, runes.subspan(to_index(begin), to_index(run_end - begin)), begin, emit,
+                                 scratch);
             begin = run_end;
         }
     }
@@ -62,8 +63,9 @@ inline auto mix_cut_append(const DictTrie &dict, const HMModel &model, std::span
     if constexpr (!hmm) {
         mp_cut_append(dict, runes, pos, out, scratch);
     } else {
-        assert_check([&] { return runes.size() <= std::numeric_limits<RuneIndex>::max() - pos; },
-                     "MixSegment: global word offsets overflow");
+        assert_check(
+            [&] { return runes.size() <= static_cast<RuneIndex>(std::numeric_limits<RuneIndex>::max() - pos); },
+            "MixSegment: global word offsets overflow");
         for_each_separated(
             runes,
             [&](std::span<const Rune> segment, RuneIndex offset) {

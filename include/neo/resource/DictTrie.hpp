@@ -383,9 +383,9 @@ private:
 
         // median — O(n) average via nth_element (mutates freqs, but we
         // already extracted min/max values above)
-        auto mid = static_cast<std::ptrdiff_t>(freqs.size() / 2);
-        std::ranges::nth_element(freqs, freqs.begin() + mid);
-        auto median_freq = freqs[mid];
+        const auto median = freqs.begin() + static_cast<std::ptrdiff_t>(freqs.size() / 2);
+        std::ranges::nth_element(freqs, median);
+        auto median_freq = *median;
         parsed.stats = FreqStats{freq_sum, min_freq, max_freq, median_freq};
 
         // ── Phase 3: Load user dictionary entries ────────────────────────

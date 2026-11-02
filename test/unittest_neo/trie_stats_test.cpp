@@ -309,7 +309,7 @@ TEST(TrieTest, MovedFromTrieCanBeQueriedAndRebuilt) {
     source.build(keys, values);
     const auto moved = Trie{std::move(source)};
     EXPECT_FLOAT_EQ(moved.find(decode("𠮷中")).weight, 0.0f);
-    EXPECT_TRUE(source.empty());
+    EXPECT_TRUE(source.empty()); // NOLINT(bugprone-use-after-move): checks the moved-from state.
     EXPECT_EQ(source.node_count(), 0u);
     EXPECT_FALSE(source.find(decode("𠮷中")).has_value());
     EXPECT_TRUE(source.find_dag(decode("𠮷中")).edges.empty());
@@ -332,7 +332,7 @@ TEST(TrieTest, MoveAssignmentReplacesWordsAcrossDifferentChildCounts) {
     for (const auto &key : keys) {
         EXPECT_FLOAT_EQ(destination.find(key).weight, -1.0f);
     }
-    EXPECT_TRUE(source.empty());
+    EXPECT_TRUE(source.empty()); // NOLINT(bugprone-use-after-move): checks the moved-from state.
     EXPECT_FALSE(source.find(decode("甲一")).has_value());
     source.build(keys, values);
     EXPECT_FLOAT_EQ(source.find(decode("甲一乙")).weight, -1.0f);
