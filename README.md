@@ -93,8 +93,8 @@ target_link_libraries(my_app PRIVATE neo_cppjieba::neo_cppjieba)
 
 <!-- benchmark:start -->
 
-数据来自 [GitHub Actions](https://github.com/AkrinW/neo-cppjieba/actions/runs/40627275579)，测试日期：2026-10-28。
-测量提交：[`d49ffe5`](https://github.com/AkrinW/neo-cppjieba/commit/d49ffe5f80e4882ef52420913b5adfaabeafaabc)。
+数据来自 [GitHub Actions](https://github.com/AkrinW/neo-cppjieba/actions/runs/41400661150)，测试日期：2026-11-02。
+测量提交：[`5a3b964`](https://github.com/AkrinW/neo-cppjieba/commit/5a3b9647da26b185b25d744566d76747ba147f10)。
 各实现使用同一主词典和 HMM 模型，关闭用户词典；neo-cppjieba 使用 `CPP` 规则。
 
 ![CppJieba、neo-cppjieba、jieba-rs 和 Python jieba 的分词吞吐量，线性坐标](docs/benchmarks/comparison.svg)
@@ -103,7 +103,7 @@ target_link_libraries(my_app PRIVATE neo_cppjieba::neo_cppjieba)
 各路径均返回独立字符串，计时覆盖分词、字符串构造和释放；语料读取、词典加载和预热在计时前完成。
 
 - 环境：GitHub 托管 `ubuntu-26.04`，AMD EPYC 9V74 80-Core Processor，绑定 CPU 0。
-- 工具链：GCC 15.2.0（`-O3 -DNDEBUG`）、rustc 1.99.0（`opt-level=3`）、CPython 3.14.8。
+- 工具链：GCC 16.0.1（`-O3 -DNDEBUG`）、rustc 1.99.0（`opt-level=3`）、CPython 3.14.8。
 - 比较版本：jieba-rs 0.11.0、Python jieba 0.42.1。
 - 语料 `testlines`：8 行、255 字节，每样本 10,000 轮，共 5 个样本。
 - 语料 `weicheng`：245 行、733,678 字节，每样本 3 轮，共 5 个样本。
