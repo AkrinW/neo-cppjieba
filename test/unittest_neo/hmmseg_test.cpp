@@ -584,8 +584,8 @@ TEST(HMMSegmentTest, SingleRuneSegmentsStayWholeInEveryHmmMode) {
     const auto model = HMModel{HMM_MODEL_FILE};
     // A modeled Chinese rune, an ASCII letter, a digit, punctuation, and a rune absent from both resources.
     const auto runes = decode(std::string_view{"我，A，7，%，𠀀"});
-    const auto expected = std::vector<WordRange>{{0, 1}, {1, 2}, {2, 3}, {3, 4}, {4, 5},
-                                                 {5, 6}, {6, 7}, {7, 8}, {8, 9}};
+    const auto expected =
+        std::vector<WordRange>{{0, 1}, {1, 2}, {2, 3}, {3, 4}, {4, 5}, {5, 6}, {6, 7}, {7, 8}, {8, 9}};
 
     EXPECT_EQ(cut<HMMSegment>(unused_dict(), model, runes), expected);
     EXPECT_EQ(cut<MixSegment<true>>(dict, model, runes), expected);
