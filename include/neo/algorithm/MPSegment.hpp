@@ -174,7 +174,8 @@ struct MPSegment {
         assert_check([&] { return detail::size_fits_capacity<RuneIndex>(runes.size()); },
                      "MPSegment: input exceeds the word-range limit");
         range.clear();
-        range.reserve(runes.size() / 2);
+        // A partition has at most one word per rune, so appending never reallocates.
+        range.reserve(runes.size());
         detail::mp_cut_append(dict, runes, 0, range, scratch);
     }
 };

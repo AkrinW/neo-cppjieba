@@ -579,6 +579,28 @@ TEST(HMMSegmentTest, SingleCharacter) {
     EXPECT_EQ(words[0], "我");
 }
 
+TEST(HMMSegmentTest, SingleRuneSegmentsStayWholeInEveryHmmMode) {
+    const auto dict = DictTrie{DICT_DIR "/jieba.dict.utf8", "", UserWordWeightOption::WordWeightMedian};
+    const auto model = HMModel{HMM_MODEL_FILE};
+    // A modeled Chinese rune, an ASCII letter, a digit, punctuation, and a rune absent from both resources.
+    const auto runes = decode(std::string_view{"我，A，7，%，𠀀"});
+    const auto expected = std::vector<WordRange>{{0, 1}, {1, 2}, {2, 3}, {3, 4}, {4, 5},
+                                                 {5, 6}, {6, 7}, {7, 8}, {8, 9}};
+
+    EXPECT_EQ(cut<HMMSegment>(unused_dict(), model, runes), expected);
+    EXPECT_EQ(cut<MixSegment<true>>(dict, model, runes), expected);
+    EXPECT_EQ(cut<QuerySegment<true>>(dict, model, runes), expected);
+}
+
+TEST(HMMSegmentTest, IsolatedSingleRuneRouteWordsStayWholeInMix) {
+    const auto dict = DictTrie{DICT_DIR "/jieba.dict.utf8", "", UserWordWeightOption::WordWeightMedian};
+    const auto model = HMModel{HMM_MODEL_FILE};
+    // "他" and "了" are one-rune HMM runs; "杭研" is a two-rune run that HMM still joins.
+    const auto runes = decode(std::string_view{"他来到了网易杭研大厦"});
+    const auto words = to_strings(runes, cut<MixSegment<true>>(dict, model, runes));
+    EXPECT_EQ(words, (std::vector<std::string>{"他", "来到", "了", "网易", "杭研", "大厦"})) << "got: " << join(words);
+}
+
 TEST(HMMSegmentTest, PureASCII) {
     auto model = HMModel{HMM_MODEL_FILE};
     auto sentence = std::string{"Hello123World"};

@@ -246,6 +246,12 @@ inline auto hmm_emit_one_segment(const HMModel &model, std::span<const Rune> run
         style_hmm_emit(model, runes, pos, emit_word, scratch);
     } else {
         auto n = static_cast<RuneIndex>(runes.size());
+        // One rune is always one word: ASCII grouping and a one-column Viterbi (final state E or S) agree.
+        // MIX and SEARCH pass every isolated single-rune route word here, so skip both scans.
+        if (n == 1) {
+            emit_word(WordRange{pos, static_cast<RuneIndex>(pos + 1)});
+            return;
+        }
 
         auto left = RuneIndex{0};
         auto right = RuneIndex{0};
@@ -332,7 +338,8 @@ struct HMMSegment {
         assert_check([&] { return detail::size_fits_capacity<RuneIndex>(runes.size()); },
                      "HMMSegment: input exceeds the word-range limit");
         range.clear();
-        range.reserve(runes.size() / 2);
+        // A partition has at most one word per rune, so appending never reallocates.
+        range.reserve(runes.size());
         detail::hmm_cut_append(model, runes, 0, range, scratch);
     }
 };

@@ -28,7 +28,8 @@ struct FullSegment {
                          std::vector<WordRange> &range, detail::SegmentScratch &scratch) -> void {
         assert(detail::size_fits_capacity<RuneIndex>(runes.size()));
         range.clear();
-        range.reserve(runes.size() / 2);
+        // Overlapping matches can exceed one word per rune; this covers typical input without regrowth.
+        range.reserve(runes.size());
         detail::for_each_separated(
             runes,
             [&](std::span<const Rune> segment, RuneIndex offset) { cut_one_segment(dict, segment, offset, range); },
