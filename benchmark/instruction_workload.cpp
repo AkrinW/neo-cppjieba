@@ -17,7 +17,6 @@
 #include "neo/value/TokenView.hpp"
 #include "neo/workspace/Workspace.hpp"
 
-#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -168,13 +167,23 @@ auto run_phase(const Phase &phase, const Inputs &inputs) -> std::uint64_t {
     return 0;
 }
 
+// The phase with this name, or null. std::array iterators are pointers in libstdc++, where clang-tidy wants
+// `auto *`, but classes in MSVC; returning a pointer works with both.
+auto find_phase(std::string_view name) -> const Phase * {
+    for (const auto &phase : phases) {
+        if (phase.name == name) {
+            return &phase;
+        }
+    }
+    return nullptr;
+}
+
 } // namespace
 
 auto main(int argc, char **argv) -> int {
     const auto arguments = std::span{argv, static_cast<std::size_t>(argc)};
-    const auto *const phase =
-        arguments.size() == 7 ? std::ranges::find(phases, std::string_view{arguments[1]}, &Phase::name) : phases.end();
-    if (phase == phases.end()) {
+    const auto *const phase = arguments.size() == 7 ? find_phase(arguments[1]) : nullptr;
+    if (phase == nullptr) {
         std::fputs("usage: instruction_workload <load|snapshot_load|cut|tag|keywords> <dict> <model> <idf> "
                    "<stop-words> <corpus>\n",
                    stderr);
