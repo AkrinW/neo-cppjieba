@@ -45,7 +45,7 @@ inline auto for_each_separated(std::span<const Rune> runes, OnText &&on_text, On
     auto begin = RuneIndex{0};
     for (auto i = size_t{0};; ++i) {
         const auto end = separators[i];
-        on_text(runes.subspan(begin, end - begin), begin);
+        on_text(runes.subspan(to_index(begin), to_index(end - begin)), begin);
         if (i + 1 == separators.size()) {
             return;
         }

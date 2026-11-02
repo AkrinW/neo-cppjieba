@@ -6,7 +6,6 @@
 #include <algorithm>
 #include <array>
 #include <cassert>
-#include <cstddef>
 #include <ranges>
 #include <span>
 
@@ -87,29 +86,29 @@ namespace neo_cppjieba::detail {
 
 // Match the non-Chinese HMM token starting at an ASCII alphanumeric rune.
 [[nodiscard]] inline auto style_hmm_ascii_end(std::span<const Rune> runes, RuneIndex begin) noexcept -> RuneIndex {
-    assert(begin < runes.size() && is_ascii_alphanumeric(runes[begin]));
+    assert(begin < runes.size() && is_ascii_alphanumeric(runes[to_index(begin)]));
     auto end = begin;
-    while (end < runes.size() && is_ascii_alphanumeric(runes[end])) {
+    while (end < runes.size() && is_ascii_alphanumeric(runes[to_index(end)])) {
         ++end;
     }
     if constexpr (compile_config::segmentation_style == SegmentationStyle::RUST) {
-        while (end < runes.size() && end + 1 < runes.size() && is_rust_connector(runes[end])
-               && is_ascii_alphanumeric(runes[end + 1])) {
+        while (end < runes.size() && end + 1 < runes.size() && is_rust_connector(runes[to_index(end)])
+               && is_ascii_alphanumeric(runes[to_index(end + 1)])) {
             ++end;
-            while (end < runes.size() && is_ascii_alphanumeric(runes[end])) {
+            while (end < runes.size() && is_ascii_alphanumeric(runes[to_index(end)])) {
                 ++end;
             }
         }
     } else {
-        if (end < runes.size() && static_cast<size_t>(end + 1) < runes.size() && runes[end] == U'.'
-            && is_python_decimal(runes[end + 1])) {
+        if (end < runes.size() && to_index(end + 1) < runes.size() && runes[to_index(end)] == U'.'
+            && is_python_decimal(runes[to_index(end + 1)])) {
             ++end;
-            while (end < runes.size() && is_python_decimal(runes[end])) {
+            while (end < runes.size() && is_python_decimal(runes[to_index(end)])) {
                 ++end;
             }
         }
     }
-    if (end < runes.size() && runes[end] == U'%') {
+    if (end < runes.size() && runes[to_index(end)] == U'%') {
         ++end;
     }
     return end;

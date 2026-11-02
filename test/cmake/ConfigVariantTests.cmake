@@ -61,7 +61,5 @@ if(NEO_TEST_HAS_UINT128)
         "uint128_t" trie_capacity_test.cpp)
     # Clang reports every subscript with a 128-bit RuneIndex as a conversion to size_t; the index never exceeds
     # the size of the span it subscripts, so these variants would otherwise warn on each rune access.
-    foreach(target IN ITEMS test_capacity_128.run test_capacity_mixed128.run)
-        target_compile_options(${target} PRIVATE $<$<CXX_COMPILER_ID:Clang,AppleClang>:-Wno-implicit-int-conversion>)
-    endforeach()
+    # detail::to_index makes those conversions explicit, so the variants keep every conversion warning.
 endif()

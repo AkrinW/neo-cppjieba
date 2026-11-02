@@ -65,7 +65,7 @@ private:
         assert(begin < end && end <= matches.size());
         const auto length = end - begin;
         assert(length == 2 || length == 3);
-        return length == 2 ? matches[begin].bigram : matches[begin].trigram;
+        return length == 2 ? matches[to_index(begin)].bigram : matches[to_index(begin)].trigram;
     }
 
     /// Emit the 2-gram and 3-gram dictionary sub-words of a route word from the recorded membership flags.

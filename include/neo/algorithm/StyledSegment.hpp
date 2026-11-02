@@ -48,14 +48,14 @@ inline auto style_build_route(const DictTrie &dict, std::span<const Rune> runes,
                 subwords.bigram |= end - i == 2;
                 subwords.trigram |= end - i == 3;
             }
-            const auto weight = word.weight + (end < runes.size() ? route[end].weight : WordWeight{0});
+            const auto weight = word.weight + (end < runes.size() ? route[to_index(end)].weight : WordWeight{0});
             if (weight > best.weight || (weight == best.weight && end > best.next_pos)) {
                 best = {weight, end};
             }
         });
         if (best.next_pos == 0) {
             const auto end = static_cast<RuneIndex>(i + 1);
-            best = {missing_weight + (end < runes.size() ? route[end].weight : WordWeight{0}), end};
+            best = {missing_weight + (end < runes.size() ? route[to_index(end)].weight : WordWeight{0}), end};
         }
         assert(std::isfinite(best.weight) && best.next_pos > i && best.next_pos <= runes.size());
         route[i] = best;
@@ -93,13 +93,14 @@ inline auto style_emit_route(const DictTrie &dict, const HMModel &model, std::sp
     const auto &route = scratch.route;
     auto begin = RuneIndex{0};
     while (begin < runes.size()) {
-        auto end = route[begin].next_pos;
-        if (end - begin != 1 || (!hmm && !is_ascii_alphanumeric(runes[begin]))) {
+        auto end = route[to_index(begin)].next_pos;
+        if (end - begin != 1 || (!hmm && !is_ascii_alphanumeric(runes[to_index(begin)]))) {
             emit(WordRange{begin, end});
             begin = end;
             continue;
         }
-        while (end < runes.size() && route[end].next_pos == end + 1 && (hmm || is_ascii_alphanumeric(runes[end]))) {
+        while (end < runes.size() && route[to_index(end)].next_pos == end + 1
+               && (hmm || is_ascii_alphanumeric(runes[to_index(end)]))) {
             ++end;
         }
         style_emit_singletons<hmm>(dict, model, runes, {begin, end}, emit, scratch);
@@ -117,9 +118,9 @@ inline auto style_emit_blocks(const DictTrie &dict, const HMModel &model, std::s
     const auto missing_weight = static_cast<WordWeight>(-std::log(static_cast<double>(dict.freq_sum())));
     auto begin = RuneIndex{0};
     while (begin < runes.size()) {
-        const auto matched = is_style_dictionary_rune(runes[begin]);
+        const auto matched = is_style_dictionary_rune(runes[to_index(begin)]);
         auto end = static_cast<RuneIndex>(begin + 1);
-        while (end < runes.size() && is_style_dictionary_rune(runes[end]) == matched) {
+        while (end < runes.size() && is_style_dictionary_rune(runes[to_index(end)]) == matched) {
             ++end;
         }
         if (matched) {
@@ -132,12 +133,12 @@ inline auto style_emit_blocks(const DictTrie &dict, const HMModel &model, std::s
                     emit(global);
                 }
             };
-            style_emit_route<hmm, mode>(dict, model, runes.subspan(begin, end - begin), missing_weight, emit_local,
-                                        scratch);
+            style_emit_route<hmm, mode>(dict, model, runes.subspan(to_index(begin), to_index(end - begin)),
+                                        missing_weight, emit_local, scratch);
         } else {
             while (begin < end) {
                 auto next = static_cast<RuneIndex>(begin + 1);
-                if (runes[begin] == U'\r' && next < end && runes[next] == U'\n') {
+                if (runes[to_index(begin)] == U'\r' && next < end && runes[to_index(next)] == U'\n') {
                     ++next;
                 }
                 if constexpr (mode == StyleMatchMode::Search) {
@@ -178,10 +179,11 @@ inline auto style_emit_compound_parts(std::span<const Rune> runes, WordRange wor
     auto begin = word.begin;
     while (begin < word.end) {
         auto end = begin;
-        while (end < word.end && !is_rust_connector(runes[end])) {
+        while (end < word.end && !is_rust_connector(runes[to_index(end)])) {
             ++end;
         }
-        if (end - begin >= 2 && std::ranges::any_of(runes.subspan(begin, end - begin), is_ascii_letter)) {
+        if (end - begin >= 2
+            && std::ranges::any_of(runes.subspan(to_index(begin), to_index(end - begin)), is_ascii_letter)) {
             out.push_back({begin, end});
         }
         begin = end < word.end ? static_cast<RuneIndex>(end + 1) : end;
@@ -203,7 +205,7 @@ inline auto style_emit_search_word(std::span<const Rune> runes, WordRange word, 
             continue;
         }
         for (auto i = word.begin; i <= word.end - width; ++i) {
-            const auto matches = subwords[i - block_begin];
+            const auto matches = subwords[to_index(i - block_begin)];
             if (width == 2 ? matches.bigram : matches.trigram) {
                 out.push_back({i, static_cast<RuneIndex>(i + width)});
             }
@@ -234,13 +236,13 @@ inline auto style_python_full_unmatched(std::span<const Rune> runes, RuneIndex p
     auto gap = RuneIndex{0};
     auto i = RuneIndex{0};
     while (i < runes.size()) {
-        if (!is_python_space(runes[i])) {
+        if (!is_python_space(runes[to_index(i)])) {
             ++i;
             continue;
         }
         out.push_back({static_cast<RuneIndex>(pos + gap), static_cast<RuneIndex>(pos + i)});
         auto end = static_cast<RuneIndex>(i + 1);
-        if (runes[i] == U'\r' && end < runes.size() && runes[end] == U'\n') {
+        if (runes[to_index(i)] == U'\r' && end < runes.size() && runes[to_index(end)] == U'\n') {
             ++end;
         }
         out.push_back({static_cast<RuneIndex>(pos + i), static_cast<RuneIndex>(pos + end)});
@@ -267,7 +269,7 @@ inline auto style_python_full_block(const DictTrie &dict, std::span<const Rune> 
     auto &matches = scratch.full_matches;
     // NOLINTNEXTLINE(bugprone-too-small-loop-variable): every entry point asserts the rune count fits RuneIndex.
     for (auto i = RuneIndex{0}; i < runes.size(); ++i) {
-        if (!is_ascii_alphanumeric(runes[i])) {
+        if (!is_ascii_alphanumeric(runes[to_index(i)])) {
             flush_english();
         }
         matches.clear();
@@ -285,7 +287,7 @@ inline auto style_python_full_block(const DictTrie &dict, std::span<const Rune> 
             continue;
         }
         const auto word = matches.front();
-        if (is_ascii_alphanumeric(runes[i])) {
+        if (is_ascii_alphanumeric(runes[to_index(i)])) {
             if (i > english.end) {
                 flush_english();
             }
@@ -308,8 +310,8 @@ inline auto style_rust_full_unmatched(std::span<const Rune> runes, RuneIndex pos
     auto begin = RuneIndex{0};
     while (begin < runes.size()) {
         auto end = static_cast<RuneIndex>(begin + 1);
-        if (is_rust_full_run(runes[begin])) {
-            while (end < runes.size() && is_rust_full_run(runes[end])) {
+        if (is_rust_full_run(runes[to_index(begin)])) {
+            while (end < runes.size() && is_rust_full_run(runes[to_index(end)])) {
                 ++end;
             }
         }
@@ -333,18 +335,18 @@ struct StyledFullSegment {
         };
         auto begin = RuneIndex{0};
         while (begin < runes.size()) {
-            const auto matched = classify(runes[begin]);
+            const auto matched = classify(runes[to_index(begin)]);
             auto end = static_cast<RuneIndex>(begin + 1);
-            while (end < runes.size() && classify(runes[end]) == matched) {
+            while (end < runes.size() && classify(runes[to_index(end)]) == matched) {
                 ++end;
             }
-            const auto block = runes.subspan(begin, end - begin);
+            const auto block = runes.subspan(to_index(begin), to_index(end - begin));
             if constexpr (compile_config::segmentation_style == SegmentationStyle::RUST) {
                 if (matched) {
                     for (auto i = begin; i < end; ++i) {
-                        dict.for_each_match_from(runes.first(end), i, [&](RuneIndex word_end, const DictUnit &) {
-                            out.push_back({i, word_end});
-                        });
+                        dict.for_each_match_from(
+                            runes.first(to_index(end)), i,
+                            [&](RuneIndex word_end, const DictUnit &) { out.push_back({i, word_end}); });
                     }
                 } else {
                     style_rust_full_unmatched(block, begin, out);

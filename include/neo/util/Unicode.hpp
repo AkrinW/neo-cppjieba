@@ -374,8 +374,8 @@ inline auto encode_validated_source(std::basic_string_view<CharT> source, std::s
                                     WordRange range) -> std::basic_string<CharT> {
     assert_check([&] { return range.begin <= range.end && range.end < offsets.size(); },
                  "Invalid internal rune range [{}, {}) for {} Unicode offsets", range.begin, range.end, offsets.size());
-    const auto begin = offsets[range.begin];
-    const auto end = offsets[range.end];
+    const auto begin = offsets[to_index(range.begin)];
+    const auto end = offsets[to_index(range.end)];
     assert_check([&] { return begin <= end && end <= source.size(); },
                  "Invalid internal source offsets [{}, {}) for {} code units", begin, end, source.size());
     if (begin == end) {
@@ -511,8 +511,8 @@ inline auto encode_source_impl(std::basic_string_view<CharT> source, std::span<c
                                WordRange range) -> std::basic_string<CharT> {
     check(range.begin <= range.end && range.end < offsets.size(), "Invalid rune range [{}, {}) for {} Unicode offsets",
           range.begin, range.end, offsets.size());
-    const auto begin = offsets[range.begin];
-    const auto end = offsets[range.end];
+    const auto begin = offsets[to_index(range.begin)];
+    const auto end = offsets[to_index(range.end)];
     check(begin <= end && end <= source.size(), "Invalid source offsets [{}, {}) for {} code units", begin, end,
           source.size());
     return encode_validated_source(source, offsets, range);

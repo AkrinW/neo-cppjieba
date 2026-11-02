@@ -68,7 +68,7 @@ inline auto mp_build_route(const DictTrie &dict, size_t n, const ForEachEdge &fo
 
             auto total = weight;
             if (next_pos < n) {
-                total += dp[next_pos].weight;
+                total += dp[to_index(next_pos)].weight;
             }
             assert_check([&] { return std::isfinite(total); }, "MPSegment: non-finite accumulated weight");
 
@@ -94,14 +94,14 @@ inline auto mp_build_route_from_matches(const DictTrie &dict, std::span<const Ru
     }
     const auto for_each_edge = [&](RuneIndex begin, const auto &emit) {
         if constexpr (mode == MPMatchMode::Search) {
-            scratch.search_subwords[begin] = {};
+            scratch.search_subwords[to_index(begin)] = {};
         }
         const auto single_end = static_cast<RuneIndex>(begin + 1);
         auto has_single = false;
         dict.for_each_match_from(runes, begin, [&](RuneIndex end, const DictUnit &word) {
             has_single |= end == single_end;
             if constexpr (mode == MPMatchMode::Search) {
-                auto &subwords = scratch.search_subwords[begin];
+                auto &subwords = scratch.search_subwords[to_index(begin)];
                 subwords.bigram |= end - begin == 2;
                 subwords.trigram |= end - begin == 3;
             }
@@ -122,7 +122,7 @@ inline auto mp_emit_route(size_t n, const Emit &emit, const SegmentScratch &scra
     assert(scratch.route.size() >= n);
     const auto &route = scratch.route;
     for (auto begin = RuneIndex{0}; begin < n;) {
-        const auto end = route[begin].next_pos;
+        const auto end = route[to_index(begin)].next_pos;
         assert_check([&] { return begin < end && end <= n; }, "MPSegment: route must advance within the rune span");
         emit(WordRange{begin, end});
         begin = end;

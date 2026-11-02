@@ -131,8 +131,8 @@ LLVM 23 来自 apt.llvm.org，软件源由 `tools/add-llvm-apt-source.sh` 添加
   由单独的 Quality 任务通过 `CLANG_TIDY_CHECKS` 运行。确属有意的个别写法用带理由的 `NOLINT` 注释标出。
   `CLANG_FORMAT`、`CLANG_TIDY` 指定工具路径；`GCC_TOOLCHAIN` 设为空值时使用编译器默认的 GCC。
 - 警告即错误任务覆盖全部容量变体。窄容量类型的运算经整数提升变为 `int`，库代码在原本隐式缩回的位置写出显式转换，
-  `-O3` 下生成的机器码与改写前逐函数一致。128 位变体用 Clang 构建时关闭 `-Wimplicit-int-conversion`：
-  每次以 128 位 `RuneIndex` 下标访问都会转换为 `size_t`，而下标不超过被访问 span 的长度。
+  `-O3` 下生成的机器码与改写前逐函数一致。以 `RuneIndex` 作容器下标时经 `detail::to_index` 显式转换为 `size_t`，
+  128 位变体因此也无需关闭转换警告；下标不超过被访问容器的长度，转换不丢失数值。
 - Sanitizer 与覆盖率构建同时启用共享和静态 C ABI。GCC 的 sanitizer 运行库以动态库链接，满足共享库的 `-z defs`；
   sanitizer 会替换分配器，因此 sanitizer 任务跳过检查私有运行库的 `neo_c_api_symbols` 和 `neo_c_api_c_host`，
   二者由 C API 工作流在常规构建中运行。

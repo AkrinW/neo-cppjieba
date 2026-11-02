@@ -45,7 +45,7 @@ inline auto to_strings(std::span<const neo_cppjieba::Rune> runes, const std::vec
     auto result = std::vector<std::string>{};
     result.reserve(ranges.size());
     for (auto &&r : ranges) {
-        result.push_back(neo_cppjieba::Utf::encode<char>(runes.subspan(r.begin, r.size())));
+        result.push_back(neo_cppjieba::Utf::encode<char>(r.slice(runes)));
     }
     return result;
 }
