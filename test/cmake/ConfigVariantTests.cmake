@@ -63,3 +63,35 @@ if(NEO_TEST_HAS_UINT128)
     # the size of the span it subscripts, so these variants would otherwise warn on each rune access.
     # detail::to_index makes those conversions explicit, so the variants keep every conversion warning.
 endif()
+
+# Generate the level a test executable's build passes to the headers, for SimdTest to compare against.
+function(cppjieba_add_simd_expectation target level)
+    set(expectation_dir "${PROJECT_BINARY_DIR}/generated/simd/${target}")
+    string(CONCAT expectation
+        "#pragma once\n\n#include \"neo/simd/SimdLevel.hpp\"\n\n"
+        "inline constexpr auto expected_simd_level = neo_cppjieba::detail::simd::SimdLevel::${level};\n")
+    file(CONFIGURE OUTPUT "${expectation_dir}/SimdExpectation.hpp" CONTENT "${expectation}" @ONLY)
+    target_include_directories(${target} PRIVATE "${expectation_dir}")
+endfunction()
+
+cppjieba_add_simd_expectation(test_neo.run "${CPPJIEBA_SIMD}")
+
+# Each level this host can execute gets its own executable, so the default OFF build still tests every level.
+# Variants need an OFF core target, since the headers reject a second CPPJIEBA_SIMD_<LEVEL> definition.
+if(CPPJIEBA_SIMD STREQUAL "OFF")
+    foreach(level IN ITEMS SSE2 AVX2 NEON)
+        cppjieba_simd_probe(${level} RUNS simd_runs)
+        if(NOT simd_runs)
+            continue()
+        endif()
+        string(TOLOWER "${level}" level_name)
+        set(target "test_simd_${level_name}.run")
+        add_executable(${target} ../gtest_main.cpp simd_test.cpp)
+        cppjieba_simd_options(${level} simd_options)
+        target_compile_definitions(${target} PRIVATE "CPPJIEBA_SIMD_${level}")
+        target_compile_options(${target} PRIVATE ${simd_options})
+        cppjieba_add_simd_expectation(${target} ${level})
+        target_link_libraries(${target} PRIVATE neo_cppjieba::neo_cppjieba cppjieba_test_support)
+        add_test(NAME neo_simd_${level_name} COMMAND ${target})
+    endforeach()
+endif()

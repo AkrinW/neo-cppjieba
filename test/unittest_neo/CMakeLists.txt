@@ -24,6 +24,7 @@ add_executable(test_neo.run
     dict_loading_test.cpp
     dict_snapshot_test.cpp
     concurrency_test.cpp
+    simd_test.cpp
 )
 
 target_compile_definitions(test_neo.run PRIVATE LOGGING_LEVEL=LL_WARNING)

@@ -38,6 +38,7 @@
 | `neo/resource/` | 资源、资源的词汇类型、诊断结果及词典快照 | `DictTrie.hpp`、`Trie.hpp`、`HMModel.hpp`、`KeywordResource.hpp`；`DictUnit.hpp`、`HMMState.hpp`；`Dag.hpp`、`TrieStats.hpp`；`DictSnapshot.hpp` |
 | `neo/algorithm/` | 算法：policy、积木、分派、结果填充 | `Segmenter.hpp`、`MixSegment.hpp` 等分词 policy、`KeywordRank.hpp`、`PosTagging.hpp`、`Output.hpp` |
 | `neo/util/` | 基础设施：不属于任何角色的支撑代码 | `Logging.hpp`、`Unicode.hpp`、`RuneString.hpp`、`StringUtil.hpp`、`FileIO.hpp`、`Platform.hpp`、`ByteOrder.hpp`、`Xxh64.hpp` |
+| `neo/simd/` | 基础设施：按 `CPPJIEBA_SIMD` 选择实现的向量化内核，平台宏与 intrinsic 只出现在这里 | `SimdLevel.hpp` |
 | `neo/encoding/` | 需要额外 CMake 目标的可选模块 | `IcuCodec.hpp` |
 
 - 公开与内部由命名空间区分，不由目录区分：`neo_cppjieba` 中不在 `detail` 的名字是公开 API，
@@ -53,6 +54,8 @@
   `Tokens` 等别名模板需要完整定义，不在其中。
 - 依赖方向：门面 → 算法 → 资源、上下文 → 值类型、配置。concept 文件依赖它约束的类型；`util/` 被各层共用，
   其中 `Unicode.hpp` 依赖 `value/Rune.hpp` 的码点类型。文件之间无环，二级目录的头文件不 include 门面。
+- `simd/` 与 `util/` 同层，只依赖 `Config.hpp` 和 `value/`，由算法和 `util/` 调用。调用方总是调用内核的统一入口，
+  入口按 `detail::simd::level` 选择不超过该级别的最高已实现版本，未开启时转发到标量实现；目录外的代码不检查平台宏。
 - 能归入某种角色的代码不放进 `util/`。例如默认分隔符是分词规则，放在 `algorithm/Separator.hpp`。
 - 资源的词汇类型（`DictUnit`、`HMMState`）单独成头文件，上下文、契约和算法使用它们时不引入资源的实现。
 

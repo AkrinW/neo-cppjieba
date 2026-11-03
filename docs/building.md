@@ -73,6 +73,28 @@ target_link_libraries(my_app PRIVATE neo_cppjieba::icu)
 `CPPJIEBA_BUILD_C_API=ON` 增加共享库、静态库和纯 C 头文件。
 构建、链接与运行库选择集中在 [C ABI 指南](../api/README.md)。
 
+### SIMD
+
+`CPPJIEBA_SIMD` 选择向量化内核使用的指令集，默认 `OFF`，只用标量代码：
+
+| 取值 | 目标 | 追加的编译选项 |
+| --- | --- | --- |
+| `OFF` | 任意 | 无 |
+| `SSE2` | x86-64 | 无，属于 x86-64 基线 |
+| `AVX2` | x86-64 | GCC / Clang 为 `-mavx2`，MSVC 为 `/arch:AVX2` |
+| `NEON` | AArch64，GCC 或 Clang | 无，属于 AArch64 基线 |
+
+配置时 CMake 带上所选选项试编译一段使用该指令集的代码，编译器或目标架构不支持时直接报错；
+取值不在表中、或 `CMAKE_OSX_ARCHITECTURES` 含多个架构时同样报错。只检查能否编译，不检查构建机的 CPU，交叉编译照常可用。
+`CPPJIEBA_SIMD_<级别>` 宏和编译选项随 `neo_cppjieba::neo_cppjieba` 传给使用方，安装包保留构建时的级别。
+
+- 级别属于整个程序的配置：同一程序的所有翻译单元须使用相同级别，否则同名内联函数会有不同定义。
+- `AVX2` 的编译选项作用于使用方的整个目标，生成的程序只能在支持 AVX2 的 CPU 上运行，库不做运行时检测。
+  C ABI 库同样随所选级别编译，分发给他人的二进制宜保持 `OFF` 或基线级别。
+- 不经 CMake 集成时，自行定义 `CPPJIEBA_SIMD_SSE2`、`CPPJIEBA_SIMD_AVX2`、`CPPJIEBA_SIMD_NEON` 之一并加上对应编译选项；
+  宏与目标架构或编译选项不符时，`neo/simd/SimdLevel.hpp` 在编译期报错。
+- 目前还没有内核按级别切换实现，各项进度见 [ROADMAP](../ROADMAP.md#分词吞吐simd)。
+
 ## 构建选项
 
 | 选项 | 默认值 | 作用 |
@@ -83,6 +105,7 @@ target_link_libraries(my_app PRIVATE neo_cppjieba::icu)
 | `CPPJIEBA_BUILD_BENCHMARKS` | OFF | 构建独立性能程序 |
 | `CPPJIEBA_BUILD_RUST_BENCHMARKS` | OFF | 增加 Rust 比较，要求 benchmark 和 Cargo |
 | `CPPJIEBA_ENABLE_ICU` | OFF | 增加 ICU 编码转换目标及测试 |
+| `CPPJIEBA_SIMD` | OFF | 向量化内核的指令集：`OFF`、`SSE2`、`AVX2`、`NEON`，见 [SIMD](#simd) |
 | `CPPJIEBA_BUILD_C_API` | OFF | 构建 C ABI 库 |
 | `CPPJIEBA_C_API_BUILD_SHARED` | ON | 启用 C API 后构建共享库 |
 | `CPPJIEBA_C_API_BUILD_STATIC` | ON | 启用 C API 后构建静态库 |
@@ -101,6 +124,7 @@ ctest --test-dir build-tests -C Debug --output-on-failure
 
 GoogleTest 按父项目目标、本地安装、源码下载的顺序查找；使用已有安装时设置 `GTest_DIR` 或 `CMAKE_PREFIX_PATH`。
 单元测试覆盖分词、编码、输出契约和容量变体，安装消费端测试检查包导出及可选组件。
+`CPPJIEBA_SIMD=OFF` 时，本机能执行的每个 SIMD 级别另有一个 `neo_simd_<级别>` 测试。
 启用 ICU 或 C API 后，CTest 增加相应的验证。性能测量命令见 [benchmark 指南](../benchmark/README.md)。
 
 ## 质量检查
