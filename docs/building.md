@@ -190,7 +190,7 @@ LLVM 23 来自 apt.llvm.org，软件源由 `tools/add-llvm-apt-source.sh` 添加
 | `deps/` | 测试、比较依赖的配置及子模块 |
 | `dict/`、`examples/` | 词典模型、可运行示例 |
 | `test/` | 单元测试、fuzz 目标、消费端测试、测试数据和 CMake 验证脚本 |
-| `benchmark/`、`docs/benchmarks/` | 测量程序、报告生成工具及已发布的数据快照 |
+| `benchmark/`、`docs/benchmarks/` | 测量程序、报告生成工具及已发布的数据快照；`benchmark/third_party/` 为随附的第三方头文件 |
 | `tools/` | 格式化、静态分析、fuzz 和覆盖率脚本 |
 
 `build*/`、`cmake-build-*/`、`install/` 和 `benchmark/results/` 用于生成输出及本地测量记录。
