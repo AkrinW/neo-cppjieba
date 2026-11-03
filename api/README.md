@@ -2,13 +2,15 @@
 
 [Build guide](../docs/building.md) · [Public C header](include/neo_cppjieba.h) · [Release notes](../CHANGELOG.md)
 
-Release 1.2.0 adds the v1 C API for UTF-8 segmentation and language bindings.
-Release 2.0.0 extends v1 with reusable workspaces, memory and snapshot loading,
-part-of-speech tags, runtime dictionary edits and keyword extraction; the 1.2.0
-functions keep their layouts and behavior.
-Shared and static libraries expose the same functions, fixed-width fields and
-independently owned results. Package versions follow the project release; the ABI
-major version and shared-library `SOVERSION` remain `1`.
+A stable C interface for C programs and language bindings: UTF-8 segmentation,
+part-of-speech tags, keyword extraction, memory and snapshot loading, and runtime
+dictionary edits. Shared and static libraries expose the same functions, fixed-width
+fields and independently owned results.
+
+ABI v1 first shipped in 1.2.0. Release 2.0.0 adds 25 functions and keeps every 1.2.0
+function, layout and behavior. Package versions follow the project release while the ABI
+stays at v1: on Linux the library file carries the release (`libneo_cppjieba_c.so.2.0.0`)
+and programs load it through the SONAME `libneo_cppjieba_c.so.1`.
 
 ## Build and install
 
@@ -38,7 +40,7 @@ Set `CMAKE_PREFIX_PATH` to the installation prefix. A shared-library consumer us
 
 ```cmake
 project(example LANGUAGES C)
-find_package(neo_cppjieba_c 1.2 CONFIG REQUIRED COMPONENTS shared)
+find_package(neo_cppjieba_c 2.0 CONFIG REQUIRED COMPONENTS shared)
 add_executable(example main.c)
 target_link_libraries(example PRIVATE neo_cppjieba::c_shared)
 ```
@@ -47,7 +49,7 @@ Static consumers enable the C++ linker and runtime for their C sources:
 
 ```cmake
 project(example LANGUAGES C CXX)
-find_package(neo_cppjieba_c 1.2 CONFIG REQUIRED COMPONENTS static)
+find_package(neo_cppjieba_c 2.0 CONFIG REQUIRED COMPONENTS static)
 add_executable(example main.c)
 target_link_libraries(example PRIVATE neo_cppjieba::c_static)
 ```
@@ -76,14 +78,14 @@ returns a status and describes the failure in an optional error buffer; see
 | `neo_jieba_v1_engine_clone` | Copy an engine for copy-on-write edits |
 | `neo_jieba_v1_engine_destroy` | Release an engine |
 
-Create an engine with nonempty main dictionary and model paths; an empty user
-dictionary path selects the main dictionary alone. Paths are UTF-8; on Windows they are
-converted to UTF-16 for the file system.
+The main dictionary and model paths are required; pass an empty user dictionary path
+to use the main dictionary alone. Paths are UTF-8; on Windows they are converted to
+UTF-16 for the file system.
 
 A `neo_jieba_source_v1` names one input: `NEO_JIEBA_V1_SOURCE_FILE` with a path of
 `size` bytes, or `NEO_JIEBA_V1_SOURCE_MEMORY` with the contents such a file would have,
-for embedded resources or platforms without a usable file system. Sources are borrowed
-only during the call; `reserved` must be zero. User dictionaries load in array order and a
+for embedded resources or platforms without a usable file system. Sources need to stay
+valid only during the call; set `reserved` to zero. User dictionaries load in array order and a
 repeated word takes the last entry. Diagnostics name memory sources by role, such as
 `<memory:model>`. All sources are checked before loading starts.
 
@@ -106,7 +108,7 @@ Runtime edits behave like user dictionary entries, weighted against the main dic
 total fixed at load time. Tags passed to `engine_add_word` must be NUL-padded, so they
 read back unchanged; an all-zero tag is empty. To keep serving reads during edits, clone
 the engine, edit the clone, then switch readers to it: cloning only reads the original.
-Existing results never refer to an engine, so edits leave them valid.
+Results are independent of the engine, so existing results stay valid across edits.
 
 ### Owned tokens
 
@@ -116,12 +118,12 @@ Existing results never refer to an engine, so edits leave them valid.
 | `neo_jieba_v1_tokens_borrow_data` | Read the result's UTF-8 text and token byte ranges |
 | `neo_jieba_v1_tokens_destroy` | Release a result and its borrowed storage |
 
-Input pointers are borrowed during the call. Results own a copy of the input and all
-token ranges, independently of the engine and earlier results. Engines may be destroyed
-after producing results.
+Input needs to stay valid only during the call. Each result owns a copy of the input
+and its token ranges, independent of the engine and of other results, so the engine can
+be destroyed while its results are still in use.
 
-Read each token with its `byte_offset` and `byte_length`. Lengths are authoritative:
-text may contain NUL bytes and individual tokens are not NUL-terminated.
+Read each token with its `byte_offset` and `byte_length`. Always rely on the lengths:
+text may contain NUL bytes, and tokens are not NUL-terminated.
 Borrowed text/range pointers remain valid until their result is destroyed; release
 the result through `tokens_destroy` in the library that created it.
 
@@ -138,12 +140,11 @@ the result through `tokens_destroy` in the library that created it.
 | `neo_jieba_v1_ranges_borrow_data` | Read the latest byte ranges and tags |
 | `neo_jieba_v1_lookup_tag` | Tag one complete word without segmenting it |
 
-`cut_utf8_into` serves callers that keep their input alive. It fills a reusable
-ranges result with byte ranges into the caller's input, without copying the input,
-and reuses a workspace's scratch storage across calls. Each fill replaces the previous
-ranges, and a failed call leaves them empty. Borrowed range pointers remain valid until
-the next fill or `ranges_destroy`. A workspace holds no results: ranges survive their
-workspace and engine.
+`cut_utf8_into` suits callers that keep their input alive: it fills a reusable ranges
+result with byte ranges into that input and reuses a workspace's scratch storage across
+calls. Each fill replaces the previous ranges, and a failed call leaves them empty.
+Borrowed range pointers remain valid until the next fill or `ranges_destroy`. Ranges stay
+valid after their workspace or engine is destroyed.
 
 `cut_utf8_tagged_into` produces the same ranges plus a parallel `tags` array of
 `neo_jieba_pos_tag_v1`: up to four bytes, NUL-padded, with no terminator when all four
@@ -170,8 +171,7 @@ it segments with the given engine in MIX mode, drops one-rune words and stop wor
 and keeps at most `top_n` keywords from the highest weight. Extractors hold only their
 IDF table and stop words, so one extractor serves any engine, including an edited clone.
 Each `neo_jieba_keyword_v1` names a slice of the borrowed occurrence array; its first
-range spells the word in the caller's input, which is never copied. Options are
-required: pass `{NULL, 0}` allowed tags to keep every candidate, and window 5,
+range gives the word's bytes in the caller's input. Options are required: pass `{NULL, 0}` allowed tags to keep every candidate, and window 5,
 iterations 10 and damping 0.85 for CppJieba's TextRank defaults. A workspace serves
 segmentation and extraction alike.
 

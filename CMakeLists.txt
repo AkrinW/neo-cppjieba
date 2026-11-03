@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(neo_cppjieba VERSION 1.2.0 LANGUAGES CXX)
+project(neo_cppjieba VERSION 2.0.0 LANGUAGES CXX)
 
 if(NOT DEFINED CMAKE_CXX_STANDARD)
     set(CMAKE_CXX_STANDARD 23)

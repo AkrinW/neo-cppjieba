@@ -14,14 +14,14 @@ this project with `CPPJIEBA_ENABLE_ICU=ON`. Source consumers link to
 `neo_cppjieba::icu`; installed consumers select the `icu` component:
 
 ```cmake
-find_package(neo_cppjieba 1.2 CONFIG REQUIRED COMPONENTS icu)
+find_package(neo_cppjieba 2.0 CONFIG REQUIRED COMPONENTS icu)
 target_link_libraries(my_app PRIVATE neo_cppjieba::icu)
 ```
 
-Set `CMAKE_PREFIX_PATH` to the cppjieba installation and use `ICU_ROOT` to select
+Set `CMAKE_PREFIX_PATH` to the neo-cppjieba installation and use `ICU_ROOT` to select
 the ICU installation. CMake reports the resolved ICU version and include path.
-ICU discovery belongs to the selected adapter component. All public headers,
-including `IcuCodec.hpp`, are installed with the core library.
+CMake looks for ICU only when the `icu` component is selected; all public headers,
+including `IcuCodec.hpp`, install with the core library.
 
 For a manual header integration, enable C++23 and link ICU explicitly:
 
@@ -39,8 +39,8 @@ target_link_libraries(my_app PRIVATE ICU::uc ICU::data)
 | Map original bytes | `decode_with_offset_into(bytes, encoding, decoded)` | Runes and source byte boundaries |
 | Map encoded bytes | `from_utf8_with_offset(utf8, encoding)` | `EncodedTextWithOffset` with `bytes` and `offsets` |
 
-Conversion borrows input for the duration of the call and returns owned storage.
-Temporary strings can be passed directly to a conversion operation.
+Conversions read the input only during the call and return owned storage, so
+temporary strings can be passed directly.
 
 ```cpp
 #include "neo/Jieba.hpp"
@@ -123,9 +123,9 @@ const auto valid = Utf::is_valid(utf8);
 const auto valid_utf16 = Utf::is_valid(std::u16string_view{u"中国😀"});
 ```
 
-Text segmentation already validates the current input during decoding, including
-in Release builds. Use the preflight function for independent validation; adding
-it before every cut performs an extra scan. `cut_runes` accepts already validated
+Segmentation validates its input while decoding, in Release builds too, so a separate
+check before each cut only adds a scan. Use `is_valid` when validation is needed on its
+own. `cut_runes` accepts already validated
 Unicode scalars; the UTF-32 text entry point validates externally supplied points.
 
 Choose the source encoding from the caller, protocol or file metadata. For example,
@@ -137,7 +137,7 @@ character types describe the intended encoding; validation checks their contents
 Malformed input and characters unavailable in the target encoding throw through
 `LogConfig::Exception`. Encoding errors identify the target, scalar and UTF-8 byte
 offset: `中A😀` fails at byte 4 when targeting GBK; GB18030 supports the final scalar.
-Embedded NUL is processed as input. Normalization and BOM handling belong to the caller.
+Embedded NUL is processed as ordinary input; normalization and BOM handling are left to the caller.
 
 Owned conversions return a complete result on success. A failed
 `decode_with_offset_into` can leave partial output; discard it and reuse the buffers

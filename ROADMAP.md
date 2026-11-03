@@ -1,22 +1,24 @@
 # Roadmap
 
-本文记录 neo-cppjieba 在 1.2.0 之后的计划方向。版本划分表示优先级，不承诺发布日期；
-各项完成后移入 [CHANGELOG](CHANGELOG.md)。1.3 与 1.4 的内容合并为 2.0.0 发布。
+本文记录 neo-cppjieba 的计划方向。版本划分表示优先级，不承诺发布日期；
+各项完成后移入 [CHANGELOG](CHANGELOG.md)。1.3 与 1.4 的内容已合并为 2.0.0 发布，两节保留尚未完成的条目。
 
 ## 现状
 
-1.2.0 已提供：
+2.0.0 已提供：
 
 - MIX、MIX_NO_HMM、FULL、SEARCH、SEARCH_NO_HMM、HMM、MP 分词，以及编译期 CPP / RUST / PYTHON 规则。
 - UTF-8、UTF-16、UTF-32 输入，借用、持有原文和独立字符串三种结果，可复用 `Workspace`。
-- 可选 ICU 编码转换、C ABI v1、可安装的 CMake 包。
-- Linux x64/ARM64、macOS ARM64、Windows x64 CI，以及与 CppJieba、jieba-rs、Python jieba 的性能对比。
+- 词性标注、TF-IDF 与 TextRank 关键词提取、从文件或内存加载资源、词典快照、运行时增删词与写时复制。
+- 可选 ICU 编码转换、可安装的 CMake 包，以及覆盖上述能力的 C ABI v1。
+- Linux x64/ARM64、macOS ARM64、Windows x64 CI，sanitizer、fuzz、覆盖率等质量检查，
+  以及与 CppJieba、jieba-rs、Python jieba 的性能对比。
 
-主要差距：原版 CppJieba 的运行时加词尚未迁移；C ABI 只覆盖单次分词。
+主要差距：尚不支持 Python jieba 的 `suggest_freq`；日志不可替换，C ABI 也没有日志回调。
 
-## 1.3 — 补齐 CppJieba 功能
+## 1.3 — 补齐 CppJieba 功能（已在 2.0.0 发布）
 
-从 CppJieba 迁移时最常见的阻碍，作为下一版本主线。
+从 CppJieba 迁移时最常见的阻碍。
 
 ### 词性标注
 
@@ -49,7 +51,7 @@
 - [x] 关键词提取器不再保存 `Jieba`，每次调用显式传入 `const Jieba &`。
 - [ ] 支持 Python jieba 的 `suggest_freq`。
 
-## 1.4 — 扩展 C ABI v1
+## 1.4 — 扩展 C ABI v1（已在 2.0.0 发布）
 
 只新增符号，不改变已有 v1 结构布局和函数语义。
 

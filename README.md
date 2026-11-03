@@ -1,25 +1,28 @@
 # neo-cppjieba
 
-基于 [CppJieba](https://github.com/yanyiwu/cppjieba) 重写的 C++23 中文分词库，
-以头文件形式提供，使用 `neo_cppjieba` 命名空间；另提供适合 C 和其他语言绑定的 C ABI。
+[![CMake](https://github.com/AkrinW/neo-cppjieba/actions/workflows/cmake.yml/badge.svg)](https://github.com/AkrinW/neo-cppjieba/actions/workflows/cmake.yml)
+[![Quality](https://github.com/AkrinW/neo-cppjieba/actions/workflows/quality.yml/badge.svg)](https://github.com/AkrinW/neo-cppjieba/actions/workflows/quality.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-- MIX、MP、HMM、FULL、SEARCH 分词，支持用户词典和词性标注。
-- TF-IDF 和 TextRank 关键词提取，结果与 CppJieba 一致。
-- UTF-8、UTF-16、UTF-32 输入，返回词语、原文位置和 Unicode 码点位置。
-- 借用视图、独立字符串、持有原文的结果，以及可复用的工作区。
-- 可选 ICU 适配器，支持 GBK / GB18030 转换及原始字节映射。
-- 在编译期选择 CppJieba、jieba-rs 或 Python jieba 分词规则。
+C++23 中文分词与关键词提取库，以头文件形式提供。分词和关键词结果与 [CppJieba](https://github.com/yanyiwu/cppjieba)
+一致，吞吐是它的 2.5–4 倍；另有稳定的 C ABI，方便其他语言绑定。
 
-[C++ 使用](docs/usage.md) · [构建与安装](docs/building.md) · [C ABI](api/README.md) ·
+- **分词**：MIX、MP、HMM、FULL、SEARCH 五种模式，支持用户词典、词性标注和运行时增删词。
+- **关键词**：TF-IDF 和 TextRank，分数与 CppJieba 逐位一致，可按词性筛选。
+- **输入输出**：接受 UTF-8、UTF-16、UTF-32；结果给出原文位置和码点位置，可以引用原文、持有原文或返回独立字符串。
+- **加载**：词典和模型可从文件或内存读取；预编译快照把内置词典的加载时间从约 85 ms 缩短到约 19 ms。
+- **兼容**：编译期切换 CppJieba、jieba-rs 或 Python jieba 的分词规则；可选 ICU 适配器处理 GBK / GB18030。
+
+[C++ 使用指南](docs/usage.md) · [构建与安装](docs/building.md) · [C ABI](api/README.md) ·
 [应用示例](examples/README.md) · [编码转换](docs/encoding.md) · [更新记录](CHANGELOG.md)
 
-**1.2.0** 增加 C ABI v1、可安装的 CMake 包和本地优先的 GoogleTest 发现。
-升级方式见 [1.2.0 发布说明](CHANGELOG.md#120---2026-10-23)。
+> **2.0.0** 新增词性标注、关键词提取、内存与快照加载、运行时增删词，C ABI 同步扩展。
+> C++ 接口有不兼容调整，升级前请阅读 [发布说明](CHANGELOG.md#200---2026-11-03)。
 
 ## 快速开始
 
-使用 CMake 3.20+ 和支持 C++23（包括 `<format>`、`<print>`）的编译器及标准库。
-CI 覆盖 GCC 16、LLVM 23 / libc++ 和 Visual Studio 2026，详见 [构建环境](docs/building.md#环境)。
+需要 CMake 3.20+ 和支持 C++23 的编译器。CI 测试 GCC 16、LLVM 23 / libc++ 和 Visual Studio 2026，
+详见 [构建环境](docs/building.md#环境)。
 
 ```sh
 git clone https://github.com/AkrinW/neo-cppjieba.git
@@ -30,9 +33,9 @@ cmake --build build --config Release --target jieba_basic_cut --parallel
 ./build/examples/jieba_basic_cut dict "我来到北京清华大学"
 ```
 
-Visual Studio 生成器的程序路径为 `build/examples/Release/jieba_basic_cut.exe`。
+使用 Visual Studio 生成器时，程序位于 `build/examples/Release/jieba_basic_cut.exe`。
 
-## 使用示例
+### 在代码中使用
 
 ```cpp
 #include "neo/Jieba.hpp"
@@ -58,38 +61,43 @@ int main() {
 清华大学
 ```
 
-构造参数依次为主词典、HMM 模型和用户词典路径；第三个参数传 `""` 可关闭用户词典。
-部署时携带这些数据文件，路径及格式见 [词典说明](dict/README.md)。
+构造参数依次是主词典、HMM 模型和用户词典的路径，用户词典可传 `""`。
+程序部署时需要带上这些数据文件，格式见 [词典说明](dict/README.md)。
 
-## CMake 集成
+### 接入 CMake 项目
 
-源码接入：
+作为子目录：
 
 ```cmake
 add_subdirectory(external/neo-cppjieba)
 target_link_libraries(my_app PRIVATE neo_cppjieba::neo_cppjieba)
 ```
 
-安装后，将安装前缀加入 `CMAKE_PREFIX_PATH`：
+或安装后通过 `find_package` 使用，安装前缀加入 `CMAKE_PREFIX_PATH`：
 
 ```cmake
-find_package(neo_cppjieba 1.2 CONFIG REQUIRED)
+find_package(neo_cppjieba 2.0 CONFIG REQUIRED)
 target_link_libraries(my_app PRIVATE neo_cppjieba::neo_cppjieba)
 ```
 
-安装命令、可选 ICU 组件和完整选项表见 [构建指南](docs/building.md)。
-共享库与静态库接入见 [C ABI 指南](api/README.md)。
+安装命令、ICU 组件和全部构建选项见 [构建指南](docs/building.md)，C 程序接入见 [C ABI 指南](api/README.md)。
 
-## API
+## 选择输出形式
 
-`cut` 返回借用原文的 token，`cut_owned` 持有原文，`cut_strings` 返回独立字符串。
-批量处理可复用 `Workspace`，并通过 `cut_into` 复用输出数组，或通过 `cut_each` 逐词处理。
-使用借用结果期间保持原文有效且稳定。
+| 入口 | 结果 | 适合 |
+| --- | --- | --- |
+| `cut` | 引用原文的 token，原文需在使用期间保持有效 | 即时处理，零拷贝 |
+| `cut_owned` | 结果自带一份原文 | 保存结果，或输入是临时字符串 |
+| `cut_strings` | 每个词一个独立字符串 | 交给其他模块继续处理 |
+| `cut_into` / `cut_each` | 写入调用方的数组 / 逐词回调 | 批量处理，配合 `Workspace` 复用内存 |
 
-[分词模式](docs/usage.md#分词模式) · [输出形式](docs/usage.md#选择输出形式) ·
-[位置与工作区](docs/usage.md#位置与工作区) · [容量配置](docs/usage.md#容量与错误处理)
+各入口都支持全部 [分词模式](docs/usage.md#分词模式)；位置坐标、工作区和容量配置见
+[C++ 使用指南](docs/usage.md#位置与工作区)。
 
 ## 性能对比
+
+同一词典和模型下，neo-cppjieba 的吞吐是 CppJieba 的 2.5–4 倍；短文本与 jieba-rs 相当，长文本快约 1.5 倍。
+GitHub 托管 runner 的硬件不固定，不同次测量的绝对数值可能相差一倍，同一次测量内的相对比例更有参考价值。
 
 <!-- benchmark:start -->
 
@@ -115,14 +123,15 @@ target_link_libraries(my_app PRIVATE neo_cppjieba::neo_cppjieba)
 
 <!-- benchmark:end -->
 
-## 开发
+## 参与开发
 
 [构建与测试](docs/building.md#测试) · [依赖和离线配置](deps/README.md) ·
-[性能测量与 CI 更新](benchmark/README.md) · [仓库布局](docs/building.md#仓库布局) ·
-[路线图](ROADMAP.md)
+[性能测量](benchmark/README.md) · [仓库布局](docs/building.md#仓库布局) · [路线图](ROADMAP.md)
 
-## 许可证
+欢迎通过 issue 讨论功能和优先级。
 
-[MIT License](LICENSE)。本项目基于 [CppJieba](https://github.com/yanyiwu/cppjieba)，
-参考了 [jieba](https://github.com/fxsjy/jieba) 和 [jieba-rs](https://github.com/messense/jieba-rs)。
-随库分发的 GTL 使用其 [独立许可证](include/neo/third_party/gtl/LICENSE)。
+## 致谢与许可证
+
+本项目基于 [CppJieba](https://github.com/yanyiwu/cppjieba) 重写，分词规则参考了 [jieba](https://github.com/fxsjy/jieba)
+和 [jieba-rs](https://github.com/messense/jieba-rs)。代码以 [MIT License](LICENSE) 发布；
+内置的 GTL 哈希表沿用其 [Apache-2.0 许可证](include/neo/third_party/gtl/LICENSE)。

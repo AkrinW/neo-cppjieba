@@ -2,11 +2,19 @@
 
 [快速开始](../README.md#快速开始) · [构建与安装](building.md) · [应用示例](../examples/README.md)
 
-公共入口是 `neo/Jieba.hpp` 中的 `neo_cppjieba::Jieba`。`include/neo/` 一级目录只有用户需要 include 的头文件：
-门面 `Jieba.hpp`、`KeywordExtractor.hpp`、`Utf.hpp`，编译期配置 `Config.hpp`，以及只声明不定义公开类型的 `Fwd.hpp`
-（自己的头文件只需在声明中写出类型名时 include 它）。二级目录是内部组织，不直接 include。
-构造时依次提供主词典、HMM 模型和用户词典路径；用户词典参数 `""` 表示仅使用主词典。
-路径相对于进程工作目录解析，Windows 路径使用 UTF-8。文件格式见 [词典说明](../dict/README.md)。
+入口类是 `neo/Jieba.hpp` 中的 `neo_cppjieba::Jieba`。用户代码只需 include `include/neo/` 一级目录的头文件，
+二级目录是内部实现：
+
+| 头文件 | 内容 |
+| --- | --- |
+| `Jieba.hpp` | 分词器 `Jieba`、结果类型和 `DictSource` |
+| `KeywordExtractor.hpp` | TF-IDF 和 TextRank 关键词提取 |
+| `Utf.hpp` | UTF 校验与编解码 |
+| `Config.hpp` | 编译期配置 |
+| `Fwd.hpp` | 公开类型的前向声明，供只在声明中用到类型名的头文件使用 |
+
+构造 `Jieba` 时依次传入主词典、HMM 模型和用户词典的路径，用户词典可传 `""`。
+相对路径基于进程的工作目录，Windows 上的路径按 UTF-8 解释。文件格式见 [词典说明](../dict/README.md)，
 从内存加载和多个用户词典见 [从内存加载词典](#从内存加载词典)。
 
 ## 输入文本
@@ -18,11 +26,11 @@
 | `char32_t` | UTF-32 |
 | `wchar_t` | 按平台宽度使用 UTF-16 或 UTF-32 |
 
-字符串、字符串视图、字符数组和连续范围都携带长度。字符串字面量省略末尾的终止 NUL，
-保留内嵌 NUL；视图和范围按给定长度读取。借用型入口要求输入在结果使用期间保持有效。
+字符串、视图、字符数组和连续范围都按自身长度读取：字符串字面量去掉末尾的 NUL，内嵌的 NUL 作为普通字符保留。
+借用型入口的结果引用输入，使用结果期间输入需保持有效。
 
-从 C 接口或其他缓冲区获得字符指针时，使用已知长度构造视图。以下片段中的
-`buffer`、`byte_count` 来自调用方，`jieba` 是已创建的分词器：
+从 C 接口或其他缓冲区拿到字符指针时，用已知长度构造视图。以下片段中
+`buffer`、`byte_count` 由调用方提供，`jieba` 是已创建的分词器：
 
 ```cpp
 #include <span>
@@ -33,7 +41,7 @@ const auto tokens = jieba.cut(text, neo_cppjieba::CutMode::MIX);
 const auto words = jieba.cut_strings(std::span<const char>{buffer, byte_count}, neo_cppjieba::CutMode::MIX);
 ```
 
-这也是从 1.1.x 原始字符指针调用迁移到 1.2.0 的方式。
+从 1.1.x 的原始字符指针调用迁移时，也按这种方式改写。
 GBK / GB18030 输入先通过 [编码适配器](encoding.md) 转换为 UTF-8。
 
 ## 分词模式
@@ -64,15 +72,15 @@ GBK / GB18030 输入先通过 [编码适配器](encoding.md) 转换为 UTF-8。
 | `cut_runes(runes, mode)` / `cut_runes_into(runes, mode, out, workspace)` | 对已校验的 Unicode 标量分词，输出 `WordRange` |
 
 `cut_runes` 的输入可用 `neo/Utf.hpp` 的 `Utf` 门面准备：`Utf::decode(text)` 返回码点数组，
-`Utf::encode<CharT>(runes)` 编码回字符串，`Utf::is_valid(text)` 只做校验。其余编码工具都在 `detail` 中。
+`Utf::encode<CharT>(runes)` 编码回字符串，`Utf::is_valid(text)` 只做校验。
 
-`token.word` 借用原文；在原文修改或销毁前完成读取。`cut_owned` 的结果移动后，重新获取 token 视图。
-需要让每个词独立存活时，选择 `cut_strings`。完整的所有权示例见 [owned_results.cpp](../examples/owned_results.cpp)。
+`token.word` 指向原文，请在原文修改或销毁之前读取。`cut_owned` 的结果被移动后，需重新获取 token 视图。
+每个词需要单独保存时，使用 `cut_strings`。完整的所有权示例见 [owned_results.cpp](../examples/owned_results.cpp)。
 
 ## 词性标注
 
 `cut`、`cut_with_workspace`、`cut_owned`、`cut_strings` 和 `cut_each` 接受模板参数 `Tagging`，
-默认 `Tagging::None`。传入 `Tagging::Pos` 后，分词结果与同一模式不变，每个词附加 `PosTag`：
+默认 `Tagging::None`。传入 `Tagging::Pos` 时，分词结果与同一模式相同，每个词另带一个 `PosTag`：
 
 | 入口 | 带词性的结果 |
 | --- | --- |
@@ -81,7 +89,7 @@ GBK / GB18030 输入先通过 [编码适配器](encoding.md) 转换为 UTF-8。
 | `cut_strings<Tagging::Pos>(text, mode)` | `TaggedWord` 数组，每项含独立的 `word` 和 `tag` |
 | `cut_each<Tagging::Pos>(text, mode, emit, workspace)` | 回调逐词接收 `TaggedTokenView` |
 | `cut_into(text, mode, out, workspace)` | 由输出类型决定：`std::vector<TaggedPosition>` 或 `std::vector<TaggedWord<CharT>>` |
-| `lookup_tag(word)` | 查询单个完整词的词性，不做分词；也接受 `std::span<const Rune>` |
+| `lookup_tag(word)` | 直接查询一个完整词的词性；也接受 `std::span<const Rune>` |
 
 返回类型 `Tokens<CharT, Tagging::Pos>` 也可写作 `TaggedTokens<CharT>`。
 
@@ -95,8 +103,8 @@ for (const auto token : jieba.cut<Tagging::Pos>("我来到北京清华大学，�
 
 词性取自主词典或用户词典的第三列。词典中没有该词，或用户词典未给出词性时，沿用 CppJieba 的规则：
 从词首开始统计 ASCII 字符，统计数达到词长一半即停止；没有 ASCII 为 `x`，全为数字为 `m`，否则为 `eng`。
-因此单字词总是 `x`，`3.14` 为 `eng`。词性规则不受 `segmentation_style` 影响；
-Python jieba 的 `posseg` 使用独立的词性 HMM 模型，本库不提供该模型。
+因此单字词总是 `x`，`3.14` 为 `eng`。三种 `segmentation_style` 使用同一套词性规则。
+Python jieba 的 `posseg` 另有一个词性 HMM 模型，本库没有实现它；`dict/pos_dict/` 中的同名数据来自上游，当前未使用。
 
 `PosTag` 最多 4 个 ASCII 字符，按值存储，可与字符串或 `neo_cppjieba::pos` 中的常量比较，
 例如 `token.tag == neo_cppjieba::pos::ns` 或 `token.tag == "ns"`。缩写含义见 [词性标记表](pos_tags.md)。
@@ -107,12 +115,12 @@ Python jieba 的 `posseg` 使用独立的词性 HMM 模型，本库不提供该�
 | `jieba.LookupTag(word)` | `jieba.lookup_tag(word)` |
 | `jieba.posseg.lcut(s)` / `lcut(s, HMM=False)` | `cut_strings<Tagging::Pos>(s, CutMode::MIX)` / `CutMode::MIX_NO_HMM` |
 
-词性只在 `Tagging::Pos` 实例中查询；默认的 `Tagging::None` 不做任何词性相关的工作。
+只有 `Tagging::Pos` 的调用才查询词性，默认的 `Tagging::None` 没有额外开销。
 
 ## 关键词提取
 
-可选头文件 `neo/KeywordExtractor.hpp` 提供两种提取器。提取器只持有 IDF 和停用词这类资源；用于分词的 `const Jieba &`
-和选项都随每次调用传入，因此同一个提取器可配合任意实例和任意选项使用，包括增删词后的 `clone()`：
+可选头文件 `neo/KeywordExtractor.hpp` 提供两种提取器。提取器只持有 IDF 和停用词等资源，`const Jieba &` 和选项
+在每次调用时传入，因此一个提取器可以搭配任意 `Jieba` 实例和选项使用，包括增删词后 `clone()` 出的实例：
 
 | 提取器 | 打分方式 | 需要的文件 |
 | --- | --- | --- |
@@ -137,8 +145,8 @@ for (const auto &keyword : extractor.extract(jieba, text, 5, TfIdfOptions{})) {
 
 ### 按词性过滤
 
-`TfIdfOptions` 和 `TextRankOptions` 的 `allowed_tags` 对应 Python jieba 的 `allowPOS`：非空时，
-只有词性在列表中的词才成为候选词。默认为空，不过滤，与 CppJieba 一致。
+`TfIdfOptions` 和 `TextRankOptions` 的 `allowed_tags` 对应 Python jieba 的 `allowPOS`：列表非空时，
+只保留词性在列表中的候选词；默认为空，保留全部候选词，与 CppJieba 相同。
 `python_textrank_tags`（`ns`、`n`、`vn`、`v`）是 Python jieba `textrank` 的默认值。
 
 ```cpp
@@ -152,20 +160,19 @@ const auto python = TextRankOptions{.allowed_tags = {python_textrank_tags.begin(
 const auto ranked = textrank.extract(jieba, text, 5, python);
 ```
 
-TF-IDF 对每个词独立打分，过滤只删去不符合的词，其余分数不变。TextRank 中被过滤的词与停用词一样
-不进入词图，也不占窗口位置，剩下的词之间重新打分。
-词性来自词典，而非 Python jieba `posseg` 的词性模型，例如主词典把"加薪"标为 `nr`，
-因此过滤结果与 Python jieba 不完全相同。
+TF-IDF 逐词独立打分，过滤只移除不符合的词，保留下来的词分数不变。TextRank 把被过滤的词当作停用词：
+它们既不进入词图，也不占窗口位置，其余词重新打分。
+词性取自词典，例如主词典把"加薪"标为 `nr`；Python jieba 使用 `posseg` 的词性模型，两者的过滤结果会有出入。
 
 连续处理文本时，用 `extract_into(jieba, text, top_n, options, out, keyword_workspace)` 复用 `KeywordWorkspace`
-和输出数组；同一工作区可在两种提取器之间共用。选项按 `const &` 传入，只在调用期间读取，不被保存；
+和输出数组，同一工作区可在两种提取器之间共用。选项只在本次调用中读取；
 `TextRankOptions` 在每次调用入口检查 `damping` 是否在 [0, 1] 内。`TextRankOptions{}` 的 `window`、`iterations`、
 `damping` 为 5、10、0.85，对应 CppJieba 同样随每次 `Extract` 传入的 `span`、`rankTime` 和固定的阻尼系数。
 
-结果与 CppJieba 的 `KeywordExtractor` / `TextRankExtractor` 一致，分数逐位相同。两处差别：
-CppJieba 对同分词的顺序未作规定；TextRank 中没有任何共现边的词（例如全文只剩一个候选词），
-CppJieba 返回空的 `word`，本库返回该词本身，分数同为 0。
-Python jieba 的 `extract_tags` / `textrank` 采用不同的规则（词频归一化、IDF 中位数、按词性过滤等），分数与本库不同。
+结果与 CppJieba 的 `KeywordExtractor` / `TextRankExtractor` 一致，分数逐位相同，只有两处细节有别：
+同分词本库固定先出现者在前，CppJieba 未规定顺序；TextRank 中没有共现边的词（例如全文只剩一个候选词），
+本库返回该词本身，CppJieba 返回空的 `word`，分数都是 0。
+Python jieba 的 `extract_tags` / `textrank` 采用另一套规则（词频归一化、IDF 中位数、按词性过滤等），分数与本库不同。
 
 | CppJieba | neo-cppjieba |
 | --- | --- |
@@ -177,10 +184,10 @@ Python jieba 的 `extract_tags` / `textrank` 采用不同的规则（词频归�
 
 ## 从内存加载词典
 
-`DictSource`（随 `neo/Jieba.hpp` 提供）表示一份输入：`DictSource::file(path)` 在加载时读取文件，
-`DictSource::memory(text, name)` 直接解析内存中的 UTF-8 文本，适合把词典编译进程序（如 `#embed`、
-资源段）或在 WASM 等不便访问文件系统的环境中使用。格式与对应文件相同；`name` 只用于错误信息。
-内存文本是借用的，只需在构造期间有效；构造完成后的对象不再引用它。
+`DictSource`（由 `neo/Jieba.hpp` 提供）描述一份词典或模型数据：`DictSource::file(path)` 在加载时读取文件；
+`DictSource::memory(text, name)` 直接解析内存中的 UTF-8 文本，适合把词典编译进程序（如 `#embed`、资源段），
+或在 WASM 这类难以访问文件系统的环境中使用。内存文本的格式与对应文件相同，`name` 用于错误信息。
+内存文本只需在构造期间有效，构造完成后即可释放。
 
 ```cpp
 #include "neo/Jieba.hpp"
@@ -220,13 +227,13 @@ const auto jieba = Jieba::from_snapshot(SnapshotSource::file("jieba.snapshot"), 
 ```
 
 - 从快照加载的实例与从生成它的源词典加载的实例分词、词性和权重完全相同；权重在加载时按当前版本的规则推导。
-- `SnapshotSource::file(path)` 在加载时把文件完整读入自有内存；`SnapshotSource::memory(bytes, name)` 借用内存，
-  只需在加载期间有效。加载完成后实例不再引用文件或内存，文件随后被修改、截断或删除都不影响它；
-  加载过程中文件被修改由校验和发现并报错。
+- `SnapshotSource::file(path)` 在加载时把整个文件读入实例自己的内存；`SnapshotSource::memory(bytes, name)`
+  的数据只需在加载期间有效。加载完成后实例与文件和内存再无关联，之后修改、截断或删除文件都没有影响；
+  文件若在加载过程中被修改，校验和会发现并报错。
 - `write_dict_snapshot` 先把快照写入目标同目录下的临时文件并刷到存储，再重命名替换目标：其他进程只会读到旧文件
   或完整的新文件，写入失败时旧文件保持不变。新文件使用默认权限（受 umask 影响）；进程在重命名前退出可能留下
-  以 `.` 开头、`.tmp` 结尾的临时文件。需要字节时（例如嵌入程序）使用 `encode_dict_snapshot`。
-- 新版本的库读取旧版本写出的快照。若某次升级改变了词典文本的解析规则，旧快照会以错误报告并提示从源词典重新生成。
+  以 `.` 开头、`.tmp` 结尾的临时文件。需要快照字节（例如嵌入程序）时，使用 `encode_dict_snapshot`。
+- 新版本的库可以读取旧版本写出的快照。如果某次升级改变了词典文本的解析规则，加载旧快照会报错，并提示从源词典重新生成。
   格式与兼容规则见 [词典快照格式](snapshot.md)。
 - 损坏、截断、版本过新或不是快照的数据通过 `LogConfig::Exception` 报告，错误信息包含来源名称。
 - 运行时增删词、`clone()` 和 `compact()` 对快照加载的实例同样适用。
@@ -242,14 +249,15 @@ jieba.add_word_with_freq("云计算", 500, PosTag{"n"}); // 频率必须为正
 const bool removed = jieba.remove_word("大厦");        // 词不存在时返回 false
 ```
 
-- 运行时加入的词与写在用户词典中的同一行效果相同：权重始终按加载时主词典的频率总和归一化，增删词不改变其他词的权重。
-- 重复加入同一个词以最后一次为准。`remove_word` 对主词典和用户词典中的词一视同仁，删除后不会恢复更早的权重。
-- 空词、非法编码、非正频率，以及超出 `TrieNodeId` 容量的加词通过 `LogConfig::Exception` 报告，词典保持不变。
+- 运行时加入的词与写在用户词典中的同一行效果相同：权重按加载时主词典的频率总和归一化，其他词的权重保持不变。
+- 重复加入同一个词以最后一次为准。`remove_word` 对主词典和用户词典中的词同样有效，删除后该词完全移除，
+  不会回退到更早的权重。
+- 空词、非法编码、非正频率，以及超出 `TrieNodeId` 容量的加词通过 `LogConfig::Exception` 报告，词典保持原样。
 
-增删词是非 `const` 操作，库内部不加锁。调用期间该 `Jieba` 不能同时执行其他调用；
-调用方按场景自行选择互斥锁、读写锁、写时复制或单线程使用。分词入口仍是 `const`，并发分词时各线程使用独立的 `Workspace`。
+增删词是非 `const` 操作，需要独占该 `Jieba`，调用期间不能有其他调用。库内部不加锁，调用方可按场景选用互斥锁、
+读写锁、写时复制或单线程。分词入口是 `const`，多个线程可同时分词，各自使用独立的 `Workspace`。
 
-`Jieba` 只能移动，不能隐式拷贝；`clone()` 显式复制完整词典和模型，用于写时复制：
+`Jieba` 支持移动；需要副本时调用 `clone()`，它复制完整的词典和模型，适合写时复制：
 
 ```cpp
 auto next = jieba.clone();       // 旧实例在复制和编辑期间可继续并发分词
@@ -257,9 +265,9 @@ next.add_word("杭研", PosTag{"nz"});
 // 发布方式由调用方决定，例如在自己的锁内替换实例，或通过原子指针切换
 ```
 
-大量增删后可调用 `compact()` 重建词典存储，回收删词留下的节点并恢复紧凑子节点存储，分词结果不变。
+大量增删之后，可调用 `compact()` 重建词典存储，回收删词留下的节点并恢复紧凑的子节点存储，分词结果保持不变。
 它同样是非 `const` 操作，耗时与重新构建词典相当。
-`TfIdfExtractor`、`TextRankExtractor` 不保存 `Jieba`，提取时使用调用传入的实例。
+关键词提取器在每次调用时接收 `Jieba`，增删词后可以继续使用同一个提取器。
 
 ## 位置与工作区
 
@@ -272,9 +280,9 @@ next.add_word("杭研", PosTag{"nz"});
 编码转换后的分词结果对应转换后的文本；定位原始 GBK / GB18030 字节的方法见
 [原始字节映射](encoding.md#original-byte-slices)。
 
-连续处理文本时，把 `Workspace` 和输出数组放在循环外复用容量。
-每个并发或嵌套调用独占一个工作区，输入和输出使用独立存储。
-`workspace.release()` 可主动释放保留的缓冲。参见 [batch_cut.cpp](../examples/batch_cut.cpp)。
+连续处理文本时，把 `Workspace` 和输出数组放在循环外，复用已分配的容量。
+并发或嵌套的调用各用一个工作区，输入和输出也使用各自的存储。
+调用 `workspace.release()` 可释放保留的缓冲。参见 [batch_cut.cpp](../examples/batch_cut.cpp)。
 
 ## 容量与错误处理
 
@@ -287,11 +295,11 @@ next.add_word("杭研", PosTag{"nz"});
 | `DagOffset` | DAG 物化接口中的边偏移 |
 | `TrieNodeId` | 主词典、用户词典和运行时加词合并后的 Trie 节点编号 |
 
-可选 8、16、32、64 位及工具链支持的原生 128 位无符号整数。
-容器大小和内存分配仍受宿主平台范围约束。调用方保证输入及词典规模符合所选容量；Debug 构建通过断言检查。
-升级头文件或修改配置后，所有使用本库的编译单元采用同一配置重新编译。
+可选 8、16、32、64 位，以及工具链支持的原生 128 位无符号整数；容器大小和内存分配仍受平台本身的限制。
+调用方负责让输入和词典规模落在所选容量内，Debug 构建会用断言检查。
+升级头文件或修改配置后，所有使用本库的编译单元都要用同一配置重新编译。
 
-文本入口在解码时校验 UTF，词典、模型和外部数据错误通过 `LogConfig::Exception` 报告。
-发生异常后，丢弃该次调用可能留下的部分输出；后续调用可继续复用工作区。
-内部不变量由断言检查。独立编码预检可使用 `neo/Utf.hpp` 的 `Utf::is_valid(input)`；
-其用途和编码识别的区别见 [UTF validation](encoding.md#utf-validation)。
+文本入口在解码时校验 UTF；词典、模型和外部数据的错误通过 `LogConfig::Exception` 报告。
+抛出异常后，该次调用留下的部分输出应丢弃，工作区可以继续复用。内部不变量由断言检查。
+只想预先校验编码时，可使用 `neo/Utf.hpp` 的 `Utf::is_valid(input)`；它与编码识别的区别见
+[UTF validation](encoding.md#utf-validation)。
