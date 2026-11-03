@@ -2,6 +2,7 @@
 
 #include "neo/resource/HMMState.hpp"
 #include "neo/third_party/gtl.hpp"
+#include "neo/util/ForceInline.hpp"
 #include "neo/util/Logging.hpp"
 #include "neo/util/StringUtil.hpp"
 #include "neo/util/Unicode.hpp"
@@ -81,18 +82,25 @@ public:
     }
 
     /// Fetch all four states with one rune lookup; absent states keep MIN_DOUBLE.
-    [[nodiscard]] auto get_emit_probs(Rune key) const noexcept -> EmitProbabilities {
+    [[nodiscard, NEO_FORCE_INLINE]]
+    auto get_emit_probs(Rune key) const noexcept -> EmitProbabilities {
         // Unsigned subtraction rejects runes on either side of the stored BMP interval.
         const auto index = static_cast<size_t>(key) - bmp_begin_;
         if (index < bmp_emit_probs_.size()) {
             return bmp_emit_probs_[index];
         }
-        const auto it = supplementary_emit_probs_.find(key);
-        return it != supplementary_emit_probs_.end() ? it->second : kMissingEmitProbs;
+        return get_sparse_emit_probs(key);
     }
 
 private:
     HMModel(const HMModel &) = default;
+
+    // Viterbi calls get_emit_probs once per rune, so it is forced inline; the hash lookup for runes outside the dense
+    // interval stays out of it, keeping that rare path from being copied into every caller.
+    [[nodiscard]] auto get_sparse_emit_probs(Rune key) const noexcept -> EmitProbabilities {
+        const auto it = supplementary_emit_probs_.find(key);
+        return it != supplementary_emit_probs_.end() ? it->second : kMissingEmitProbs;
+    }
 
     // ── Model parameters (inspect through get_start_prob and get_trans_prob) ─────────
 

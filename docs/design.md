@@ -37,7 +37,7 @@
 | `neo/concept/` | 契约：角色之间接口的 concept | `Text.hpp`、`Output.hpp`、`Segment.hpp`、`Match.hpp`、`Keyword.hpp` |
 | `neo/resource/` | 资源、资源的词汇类型、诊断结果及词典快照 | `DictTrie.hpp`、`Trie.hpp`、`HMModel.hpp`、`KeywordResource.hpp`；`DictUnit.hpp`、`HMMState.hpp`；`Dag.hpp`、`TrieStats.hpp`；`DictSnapshot.hpp` |
 | `neo/algorithm/` | 算法：policy、积木、分派、结果填充 | `Segmenter.hpp`、`MixSegment.hpp` 等分词 policy、`KeywordRank.hpp`、`PosTagging.hpp`、`Output.hpp` |
-| `neo/util/` | 基础设施：不属于任何角色的支撑代码 | `Logging.hpp`、`Unicode.hpp`、`RuneString.hpp`、`StringUtil.hpp`、`FileIO.hpp`、`Platform.hpp`、`ByteOrder.hpp`、`Xxh64.hpp` |
+| `neo/util/` | 基础设施：不属于任何角色的支撑代码 | `Logging.hpp`、`Unicode.hpp`、`RuneString.hpp`、`StringUtil.hpp`、`FileIO.hpp`、`Platform.hpp`、`ByteOrder.hpp`、`Xxh64.hpp`、`ForceInline.hpp` |
 | `neo/simd/` | 基础设施：按 `CPPJIEBA_SIMD` 选择实现的向量化内核，平台宏与 intrinsic 只出现在这里 | `SimdLevel.hpp`、`RuneMatch.hpp` |
 | `neo/encoding/` | 需要额外 CMake 目标的可选模块 | `IcuCodec.hpp` |
 
@@ -57,6 +57,9 @@
 - `simd/` 与 `util/` 同层，只依赖 `Config.hpp`、`value/` 和 `util/Logging.hpp`，由算法和 `util/` 调用。
   调用方总是调用内核的统一入口，入口按 `detail::simd::level` 选择不超过该级别的最高已实现版本，未开启时转发到标量实现；
   目录外的代码不检查平台宏。
+- `NEO_FORCE_INLINE`（`util/ForceInline.hpp`）只用于测量过的逐字符热点函数：大翻译单元用完 GCC 的 `inline-unit-growth`
+  预算后，这类函数会变成真实调用。宏是属性名，写进属性列表，如 `[[nodiscard, NEO_FORCE_INLINE]]`；罕见路径拆成单独的
+  函数，不随强制内联复制到每个调用处。`test/cmake/CheckInlining.cmake` 列出全部使用者，在耗尽内联预算的探针中检查它们没有独立副本。
 - 能归入某种角色的代码不放进 `util/`。例如默认分隔符是分词规则，放在 `algorithm/Separator.hpp`。
 - 资源的词汇类型（`DictUnit`、`HMMState`）单独成头文件，上下文、契约和算法使用它们时不引入资源的实现。
 

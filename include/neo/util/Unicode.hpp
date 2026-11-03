@@ -2,6 +2,7 @@
 
 #include "neo/Config.hpp"
 #include "neo/concept/Text.hpp"
+#include "neo/util/ForceInline.hpp"
 #include "neo/util/Logging.hpp"
 #include "neo/value/Rune.hpp"
 
@@ -231,6 +232,31 @@ constexpr auto decode_one_utf8(std::span<const CharT> input) noexcept -> Decoded
     return {.rune = rune, .code_units = 4};
 }
 
+// decode_utf8_fast decodes ASCII and 3-byte sequences led by E1–EC or EE–EF, which can be neither overlong nor
+// surrogates, so their continuation bits validate them fully. It returns code_units == 0 for every other input;
+// NEO_FORCE_INLINE keeps it in the decoding loop however large the including translation unit is.
+template <CodeUnit CharT>
+    requires(encoding_of_v<CharT> == Encoding::UTF8)
+[[nodiscard, NEO_FORCE_INLINE]]
+constexpr auto decode_utf8_fast(std::span<const CharT> input) noexcept -> DecodedRune {
+    assert_check([&] { return !input.empty(); }, "UTF-8 decoding requires a nonempty internal span");
+    const auto first = static_cast<uint8_t>(input[0]);
+    if (first < 0x80) {
+        return {.rune = static_cast<Rune>(first), .code_units = 1};
+    }
+    // E0 needs the overlong check and ED the surrogate check; other leads are not 3-byte sequences.
+    if (input.size() < 3 || (first & 0xF0) != 0xE0 || first == 0xE0 || first == 0xED) {
+        return {};
+    }
+    const auto second = static_cast<uint8_t>(input[1]);
+    const auto third = static_cast<uint8_t>(input[2]);
+    if ((second & 0xC0) != 0x80 || (third & 0xC0) != 0x80) {
+        return {};
+    }
+    return {.rune = static_cast<Rune>(((first & 0xF) << 12) | ((second & 0x3F) << 6) | (third & 0x3F)),
+            .code_units = 3};
+}
+
 // decode_one_utf16 decodes a single Unicode code point from a UTF-16 encoded string and returns it as a Rune.
 template <CharType CharT>
     requires(encoding_of_v<CharT> == Encoding::UTF16)
@@ -441,7 +467,14 @@ auto decode_into_impl(std::span<const CharT> input,
 
     for (auto i = size_t{0}; i < input.size();) {
         // Invalid UTF-8/UTF-16 sequences throw instead of discarding the decoded prefix.
-        const auto decoded = checked_decode_step(input.subspan(i), i);
+        auto decoded = DecodedRune{};
+        if constexpr (encoding_of_v<CharT> == Encoding::UTF8) {
+            // The fast path accepts only sequences it fully validates; every other one reaches checked_decode_step.
+            decoded = decode_utf8_fast(input.subspan(i));
+        }
+        if (decoded.code_units == 0) {
+            decoded = checked_decode_step(input.subspan(i), i);
+        }
         if constexpr (Mode == OffsetMode::Record) {
             result.offsets.push_back(static_cast<SourceOffset>(i));
         }

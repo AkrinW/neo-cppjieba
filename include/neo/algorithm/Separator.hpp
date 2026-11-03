@@ -64,7 +64,12 @@ inline auto get_pre_filter_separators(std::span<const char32_t> runes, std::vect
     auto n = static_cast<RuneIndex>(runes.size());
     out.clear();
     out.reserve(to_index(n / 8)); // heuristic: ~12.5% separators
-    simd::append_matches(runes, DEFAULT_SEPARATORS, is_default_separator_unlikely, out);
+    // A lambda keeps the per-rune predicate a direct call that the early inliner removes; a function reference
+    // stays an indirect call until the translation-unit budget allows inlining append_matches.
+    const auto is_separator = [](char32_t rune) noexcept {
+        return is_default_separator_unlikely(rune);
+    };
+    simd::append_matches(runes, DEFAULT_SEPARATORS, is_separator, out);
     // The end sentinel lets callers slice [previous + 1, next) without special-casing the last segment.
     out.push_back(n);
 }

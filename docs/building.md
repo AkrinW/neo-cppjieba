@@ -127,6 +127,7 @@ ctest --test-dir build-tests -C Debug --output-on-failure
 GoogleTest 按父项目目标、本地安装、源码下载的顺序查找；使用已有安装时设置 `GTest_DIR` 或 `CMAKE_PREFIX_PATH`。
 单元测试覆盖分词、编码、输出契约和容量变体，安装消费端测试检查包导出及可选组件。
 `CPPJIEBA_SIMD=OFF` 时，本机能执行的每个 SIMD 级别另有一个 `neo_simd_<级别>` 测试。
+GCC 构建另有 `neo_inline_hot_paths`，检查逐字符热点函数在内联预算耗尽时仍被内联。
 启用 ICU 或 C API 后，CTest 增加相应的验证。性能测量命令见 [benchmark 指南](../benchmark/README.md)。
 
 ## 质量检查
