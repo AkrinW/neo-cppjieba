@@ -22,7 +22,8 @@ struct KeywordCandidate {
     PosTag tag;
 
     // The word as code points of the decoded input it was collected from.
-    [[nodiscard]] auto word(std::span<const Rune> runes) const noexcept -> std::u32string_view {
+    [[nodiscard]]
+    auto word(std::span<const Rune> runes) const noexcept -> std::u32string_view {
         return rune_view(first.runes.slice(runes));
     }
 };

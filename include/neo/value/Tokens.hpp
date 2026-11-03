@@ -23,14 +23,16 @@ namespace detail {
 
 // Untagged and tagged results share storage and iteration; only the stored record and its view differ.
 template <CharType CharT>
-[[nodiscard]] constexpr auto make_token_view(std::basic_string_view<CharT> source,
-                                             const TokenPosition &position) noexcept -> TokenView<CharT> {
+[[nodiscard]]
+constexpr auto make_token_view(std::basic_string_view<CharT> source, const TokenPosition &position) noexcept
+    -> TokenView<CharT> {
     return {position.source.slice(source), position};
 }
 
 template <CharType CharT>
-[[nodiscard]] constexpr auto make_token_view(std::basic_string_view<CharT> source,
-                                             const TaggedPosition &tagged) noexcept -> TaggedTokenView<CharT> {
+[[nodiscard]]
+constexpr auto make_token_view(std::basic_string_view<CharT> source, const TaggedPosition &tagged) noexcept
+    -> TaggedTokenView<CharT> {
     return {tagged.position.source.slice(source), tagged.position, tagged.tag};
 }
 
@@ -53,7 +55,8 @@ public:
         : source_(source), position_(position) {
     }
 
-    [[nodiscard]] auto operator*() const noexcept -> value_type {
+    [[nodiscard]]
+    auto operator*() const noexcept -> value_type {
         return make_token_view(source_, *position_);
     }
 
@@ -68,7 +71,8 @@ public:
         return previous;
     }
 
-    [[nodiscard]] auto operator==(const TokenIterator &other) const noexcept -> bool {
+    [[nodiscard]]
+    auto operator==(const TokenIterator &other) const noexcept -> bool {
         return position_ == other.position_;
     }
 
@@ -93,39 +97,50 @@ public:
     using const_iterator = TokenIterator<char_type, Position>;
     using value_type = typename const_iterator::value_type;
 
-    [[nodiscard]] auto size() const noexcept -> size_t {
+    [[nodiscard]]
+    auto size() const noexcept -> size_t {
         return positions_.size();
     }
 
-    [[nodiscard]] auto empty() const noexcept -> bool {
+    [[nodiscard]]
+    auto empty() const noexcept -> bool {
         return positions_.empty();
     }
 
-    [[nodiscard]] auto source() const & noexcept -> std::basic_string_view<char_type> {
+    [[nodiscard]]
+    auto source() const & noexcept -> std::basic_string_view<char_type> {
         return source_;
     }
-    [[nodiscard]] auto source() const && noexcept -> std::basic_string_view<char_type> = delete;
+    [[nodiscard]]
+    auto source() const && noexcept -> std::basic_string_view<char_type> = delete;
 
-    [[nodiscard]] auto positions() const & noexcept -> std::span<const Position> {
+    [[nodiscard]]
+    auto positions() const & noexcept -> std::span<const Position> {
         return positions_;
     }
-    [[nodiscard]] auto positions() const && noexcept -> std::span<const Position> = delete;
+    [[nodiscard]]
+    auto positions() const && noexcept -> std::span<const Position> = delete;
 
-    [[nodiscard]] auto operator[](size_t index) const & noexcept -> value_type {
+    [[nodiscard]]
+    auto operator[](size_t index) const & noexcept -> value_type {
         assert_check([&] { return index < positions_.size(); }, "Token index exceeds the result size");
         return make_token_view(source(), positions_[index]);
     }
     auto operator[](size_t) const && noexcept -> value_type = delete;
 
-    [[nodiscard]] auto begin() const & noexcept -> const_iterator {
+    [[nodiscard]]
+    auto begin() const & noexcept -> const_iterator {
         return {source(), positions_.cbegin()};
     }
-    [[nodiscard]] auto begin() const && noexcept -> const_iterator = delete;
+    [[nodiscard]]
+    auto begin() const && noexcept -> const_iterator = delete;
 
-    [[nodiscard]] auto end() const & noexcept -> const_iterator {
+    [[nodiscard]]
+    auto end() const & noexcept -> const_iterator {
         return {source(), positions_.cend()};
     }
-    [[nodiscard]] auto end() const && noexcept -> const_iterator = delete;
+    [[nodiscard]]
+    auto end() const && noexcept -> const_iterator = delete;
 
 private:
     friend class ::neo_cppjieba::Jieba;

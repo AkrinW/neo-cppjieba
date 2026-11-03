@@ -29,7 +29,8 @@ struct Dag {
     std::vector<DagEdge> edges;
 
     /// Return the outgoing edges from vertex `i`.
-    [[nodiscard]] auto get_edges(size_t i) const noexcept -> std::span<const DagEdge> {
+    [[nodiscard]]
+    auto get_edges(size_t i) const noexcept -> std::span<const DagEdge> {
         if (i >= size()) {
             return {};
         }
@@ -40,7 +41,8 @@ struct Dag {
     }
 
     /// Number of rune positions in this DAG (i.e. sentence length).
-    [[nodiscard]] auto size() const noexcept -> size_t {
+    [[nodiscard]]
+    auto size() const noexcept -> size_t {
         return offsets.empty() ? 0 : offsets.size() - 1;
     }
 
@@ -51,7 +53,8 @@ struct Dag {
     ///
     /// @param runes  the original Unicode sequence (must match DAG size)
     /// @param sep    separator between entries (default: ", ")
-    [[nodiscard]] auto to_string(std::span<const Rune> runes, std::string_view sep = ", ") const -> std::string {
+    [[nodiscard]]
+    auto to_string(std::span<const Rune> runes, std::string_view sep = ", ") const -> std::string {
         auto n = size();
         if (n == 0 || runes.size() != n) {
             return {};

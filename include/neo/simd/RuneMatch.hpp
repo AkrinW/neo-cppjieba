@@ -65,8 +65,9 @@ namespace sse2 {
 
 /// Return a mask whose bit k is set when block[k] equals one of needles, comparing 4 runes per step.
 template <std::size_t N>
-[[nodiscard]] inline auto block_match_mask(std::span<const char32_t, match_block_size> block,
-                                           const std::array<char32_t, N> &needles) noexcept -> std::uint32_t {
+[[nodiscard]]
+inline auto block_match_mask(std::span<const char32_t, match_block_size> block,
+                             const std::array<char32_t, N> &needles) noexcept -> std::uint32_t {
     constexpr auto lanes = std::size_t{4};
     auto mask = std::uint32_t{0};
     for (auto offset = std::size_t{0}; offset < match_block_size; offset += lanes) {
@@ -88,8 +89,9 @@ namespace avx2 {
 
 /// Return a mask whose bit k is set when block[k] equals one of needles, comparing 8 runes per step.
 template <std::size_t N>
-[[nodiscard]] inline auto block_match_mask(std::span<const char32_t, match_block_size> block,
-                                           const std::array<char32_t, N> &needles) noexcept -> std::uint32_t {
+[[nodiscard]]
+inline auto block_match_mask(std::span<const char32_t, match_block_size> block,
+                             const std::array<char32_t, N> &needles) noexcept -> std::uint32_t {
     constexpr auto lanes = std::size_t{8};
     auto mask = std::uint32_t{0};
     for (auto offset = std::size_t{0}; offset < match_block_size; offset += lanes) {

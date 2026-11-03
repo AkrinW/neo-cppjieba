@@ -146,7 +146,8 @@ struct BufferedMixResult {
         RuneIndex offset{0};
         Dag dag;
 
-        [[nodiscard]] auto end() const noexcept -> RuneIndex {
+        [[nodiscard]]
+        auto end() const noexcept -> RuneIndex {
             return offset + static_cast<RuneIndex>(dag.size());
         }
     };

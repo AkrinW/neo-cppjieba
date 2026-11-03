@@ -17,7 +17,8 @@ struct OldEngine::Impl {
     cppjieba::Jieba jieba;
 
     // Dispatch one line to the legacy call matching mode.
-    [[nodiscard]] auto cut(const std::string &line, CompareMode mode) const -> std::vector<std::string> {
+    [[nodiscard]]
+    auto cut(const std::string &line, CompareMode mode) const -> std::vector<std::string> {
         auto words = std::vector<std::string>{};
         switch (mode) {
             case CompareMode::Mix:

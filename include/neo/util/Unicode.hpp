@@ -127,7 +127,8 @@ struct DecodedRune {
 };
 
 // Exclude surrogate code points while retaining NUL, noncharacters and unassigned scalars.
-[[nodiscard]] constexpr auto is_unicode_scalar(Rune rune) noexcept -> bool {
+[[nodiscard]]
+constexpr auto is_unicode_scalar(Rune rune) noexcept -> bool {
     return rune <= 0x10FFFF && (rune < 0xD800 || rune > 0xDFFF);
 }
 
@@ -557,7 +558,8 @@ inline auto encode_source_impl(std::basic_string_view<CharT> source, std::span<c
 // Validate the UTF encoding associated with the input's code-unit type without allocating decoding buffers.
 // This checks well-formedness, not the original encoding of bytes that are valid in several encodings.
 template <StringLike T>
-[[nodiscard]] constexpr auto is_valid_utf(const T &input) -> bool {
+[[nodiscard]]
+constexpr auto is_valid_utf(const T &input) -> bool {
     const auto units = as_code_units(input);
     for (auto offset = std::size_t{0}; offset < units.size();) {
         const auto decoded = decode_step(units.subspan(offset));

@@ -176,31 +176,41 @@ struct PrivateLogConfig {
 
 // An incomplete configuration must be rejected at the logging API boundary.
 struct MissingExceptionConfig {
-    [[maybe_unused]] static constexpr auto show_source_location = true;
-    [[maybe_unused]] static constexpr auto min_level = LogConfig::min_level;
-    [[maybe_unused]] static constexpr auto buffer_size = LogConfig::buffer_size;
+    [[maybe_unused]]
+    static constexpr auto show_source_location = true;
+    [[maybe_unused]]
+    static constexpr auto min_level = LogConfig::min_level;
+    [[maybe_unused]]
+    static constexpr auto buffer_size = LogConfig::buffer_size;
 };
 
 // An exception alias alone does not specify the source location policy.
 struct MissingSourceLocationConfig {
-    [[maybe_unused]] static constexpr auto min_level = LogConfig::min_level;
-    [[maybe_unused]] static constexpr auto buffer_size = LogConfig::buffer_size;
+    [[maybe_unused]]
+    static constexpr auto min_level = LogConfig::min_level;
+    [[maybe_unused]]
+    static constexpr auto buffer_size = LogConfig::buffer_size;
     using Exception = ProjectError;
 };
 
 // A constructible message type still needs to be an exception.
 struct InvalidExceptionConfig {
-    [[maybe_unused]] static constexpr auto show_source_location = true;
-    [[maybe_unused]] static constexpr auto min_level = LogConfig::min_level;
-    [[maybe_unused]] static constexpr auto buffer_size = LogConfig::buffer_size;
+    [[maybe_unused]]
+    static constexpr auto show_source_location = true;
+    [[maybe_unused]]
+    static constexpr auto min_level = LogConfig::min_level;
+    [[maybe_unused]]
+    static constexpr auto buffer_size = LogConfig::buffer_size;
     using Exception = std::string;
 };
 
 // An integer switch must not implicitly satisfy the boolean configuration contract.
 struct IntegerSourceLocationConfig {
     static constexpr auto show_source_location = 1;
-    [[maybe_unused]] static constexpr auto min_level = LogConfig::min_level;
-    [[maybe_unused]] static constexpr auto buffer_size = LogConfig::buffer_size;
+    [[maybe_unused]]
+    static constexpr auto min_level = LogConfig::min_level;
+    [[maybe_unused]]
+    static constexpr auto buffer_size = LogConfig::buffer_size;
     using Exception = ProjectError;
 };
 
@@ -213,8 +223,10 @@ auto runtime_config_value(T value) -> T {
 // An uninitialized constant declaration cannot supply a compile-time policy value.
 struct NonConstantSourceLocationConfig {
     static const bool show_source_location;
-    [[maybe_unused]] static constexpr auto min_level = LogConfig::min_level;
-    [[maybe_unused]] static constexpr auto buffer_size = LogConfig::buffer_size;
+    [[maybe_unused]]
+    static constexpr auto min_level = LogConfig::min_level;
+    [[maybe_unused]]
+    static constexpr auto buffer_size = LogConfig::buffer_size;
     using Exception = ProjectError;
 };
 
@@ -255,7 +267,8 @@ struct LargeBufferLogConfig {
 struct InvalidLogLevelConfig {
     static constexpr auto show_source_location = false;
     static constexpr auto min_level = static_cast<LogLevel>(255);
-    [[maybe_unused]] static constexpr auto buffer_size = LogConfig::buffer_size;
+    [[maybe_unused]]
+    static constexpr auto buffer_size = LogConfig::buffer_size;
     using Exception = ProjectError;
 };
 
@@ -263,7 +276,8 @@ struct InvalidLogLevelConfig {
 struct NonConstantLogLevelConfig {
     static constexpr auto show_source_location = false;
     static const LogLevel min_level;
-    [[maybe_unused]] static constexpr auto buffer_size = LogConfig::buffer_size;
+    [[maybe_unused]]
+    static constexpr auto buffer_size = LogConfig::buffer_size;
     using Exception = ProjectError;
 };
 
@@ -559,8 +573,10 @@ TEST(LoggingTest, ExplicitDebugThresholdEnablesDebugInBothBuildModes) {
 }
 
 TEST(LoggingTest, HmmModelLoadWritesNothingToStderr) {
-    const auto output = capture_stderr(
-        [] { [[maybe_unused]] const auto model = detail::HMModel{std::string_view{DICT_DIR "/hmm_model.utf8"}}; });
+    const auto output = capture_stderr([] {
+        [[maybe_unused]]
+        const auto model = detail::HMModel{std::string_view{DICT_DIR "/hmm_model.utf8"}};
+    });
     EXPECT_TRUE(output.empty());
 }
 

@@ -63,8 +63,8 @@ using ActiveSegmentFamily = std::conditional_t<compile_config::segmentation_styl
                                                CppSegmentFamily, StyledSegmentFamily>;
 
 // Partition modes cover every rune once; full and search modes may emit overlapping words.
-[[nodiscard]] inline auto valid_segment_result(CutMode mode, std::span<const WordRange> words,
-                                               size_t rune_count) noexcept -> bool {
+[[nodiscard]]
+inline auto valid_segment_result(CutMode mode, std::span<const WordRange> words, size_t rune_count) noexcept -> bool {
     if (mode == CutMode::MIX || mode == CutMode::MIX_NO_HMM || mode == CutMode::HMM || mode == CutMode::MP) {
         return valid_segment_partition(words, rune_count);
     }

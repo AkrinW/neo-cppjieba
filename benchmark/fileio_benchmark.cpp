@@ -43,10 +43,14 @@ static auto BenchOldMethod(const std::string &path, int iterations) -> std::chro
             limonp::Split(line, buf, " ");
             // Simulate the same work DictTrie::LoadDict does: access all 3 fields
             if (buf.size() == 3) {
-                [[maybe_unused]] volatile auto *w = buf[0].data();
-                // NOLINTNEXTLINE(bugprone-unchecked-string-to-number-conversion): mirrors CppJieba's own parsing.
-                [[maybe_unused]] volatile auto f = std::atof(buf[1].c_str());
-                [[maybe_unused]] volatile auto *t = buf[2].data();
+                [[maybe_unused]]
+                volatile auto *w = buf[0].data();
+                // NOLINTBEGIN(bugprone-unchecked-string-to-number-conversion): mirrors CppJieba's own parsing.
+                [[maybe_unused]]
+                volatile auto f = std::atof(buf[1].c_str());
+                // NOLINTEND(bugprone-unchecked-string-to-number-conversion)
+                [[maybe_unused]]
+                volatile auto *t = buf[2].data();
             }
             ++line_count;
         }
@@ -82,18 +86,21 @@ static auto BenchNewMethod(const std::string &path, int iterations) -> std::chro
                 // Simulate the same work: access each field
                 switch (field_idx) {
                     case 0: {
-                        [[maybe_unused]] const volatile auto *w = field.data();
+                        [[maybe_unused]]
+                        const volatile auto *w = field.data();
                         break;
                     }
                     case 1: {
                         // std::from_chars avoids requiring null-terminated string
                         auto val = 0.0;
                         std::from_chars(field.data(), field.data() + field.size(), val);
-                        [[maybe_unused]] const volatile auto f = val;
+                        [[maybe_unused]]
+                        const volatile auto f = val;
                         break;
                     }
                     case 2: {
-                        [[maybe_unused]] const volatile auto *t = field.data();
+                        [[maybe_unused]]
+                        const volatile auto *t = field.data();
                         break;
                     }
                     default: {

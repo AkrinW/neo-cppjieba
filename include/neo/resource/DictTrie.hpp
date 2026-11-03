@@ -64,7 +64,8 @@ struct LevelOrderDict {
 
 // Describe the first violation of the invariants DictTrie relies on when building from a level-order dictionary,
 // or return an empty view. Snapshot decoding reports it as invalid data.
-[[nodiscard]] inline auto level_order_dict_error(const LevelOrderDict &dict) -> std::string_view {
+[[nodiscard]]
+inline auto level_order_dict_error(const LevelOrderDict &dict) -> std::string_view {
     const auto &stats = dict.stats;
     if (stats.min <= 0 || stats.min > stats.median || stats.median > stats.max || stats.max > stats.sum) {
         return "frequency statistics are inconsistent";
@@ -129,8 +130,9 @@ public:
 
     /// Parse text sources with the rules construction applies, into the canonical layout snapshots store.
     /// Equal words keep their last entry, as construction does.
-    [[nodiscard]] static auto level_order(const DictSource &dict, std::span<const DictSource> user_dicts,
-                                          UserWordWeightOption user_word_weight_opt) -> LevelOrderDict {
+    [[nodiscard]]
+    static auto level_order(const DictSource &dict, std::span<const DictSource> user_dicts,
+                            UserWordWeightOption user_word_weight_opt) -> LevelOrderDict {
         check_user_word_weight_option(user_word_weight_opt);
         auto parsed = parse_sources(dict, user_dicts);
         auto entries = sorted_last_entries(std::move(parsed.entries));
@@ -159,14 +161,16 @@ public:
     auto operator=(const DictTrie &) -> DictTrie & = delete;
 
     /// Copy the dictionary, including runtime edits; copies are explicit because the trie is large.
-    [[nodiscard]] auto clone() const -> DictTrie {
+    [[nodiscard]]
+    auto clone() const -> DictTrie {
         return DictTrie{*this};
     }
 
     // ── Query interface ──────────────────────────────────────────────────
 
     /// Find exact match by rune span.
-    [[nodiscard]] auto find(std::span<const Rune> key) const noexcept -> DictUnit {
+    [[nodiscard]]
+    auto find(std::span<const Rune> key) const noexcept -> DictUnit {
         return trie_.find(key);
     }
 
@@ -176,7 +180,8 @@ public:
         trie_.for_each_match_from(runes, begin, std::forward<Emit>(emit));
     }
 
-    [[nodiscard]] auto find_dag(std::span<const Rune> runes) const -> Dag {
+    [[nodiscard]]
+    auto find_dag(std::span<const Rune> runes) const -> Dag {
         return trie_.find_dag(runes);
     }
 
@@ -187,26 +192,33 @@ public:
 
     /// Check if a single Chinese character comes from the user dictionary.
     /// MIX and SEARCH ask this for every single-rune route word, and most user dictionaries add none.
-    [[nodiscard]] auto is_user_dict_single_chinese_word(Rune word) const noexcept -> bool {
+    [[nodiscard]]
+    auto is_user_dict_single_chinese_word(Rune word) const noexcept -> bool {
         return !user_dict_single_chinese_word_.empty() && user_dict_single_chinese_word_.contains(word);
     }
 
-    [[nodiscard]] auto min_weight() const noexcept -> detail::WordWeight {
+    [[nodiscard]]
+    auto min_weight() const noexcept -> detail::WordWeight {
         return min_weight_;
     }
-    [[nodiscard]] auto max_weight() const noexcept -> detail::WordWeight {
+    [[nodiscard]]
+    auto max_weight() const noexcept -> detail::WordWeight {
         return max_weight_;
     }
-    [[nodiscard]] auto median_weight() const noexcept -> detail::WordWeight {
+    [[nodiscard]]
+    auto median_weight() const noexcept -> detail::WordWeight {
         return median_weight_;
     }
-    [[nodiscard]] auto user_word_default_weight() const noexcept -> detail::WordWeight {
+    [[nodiscard]]
+    auto user_word_default_weight() const noexcept -> detail::WordWeight {
         return user_word_default_weight_;
     }
-    [[nodiscard]] auto freq_sum() const noexcept -> detail::WordWeight {
+    [[nodiscard]]
+    auto freq_sum() const noexcept -> detail::WordWeight {
         return freq_sum_;
     }
-    [[nodiscard]] auto trie() const noexcept -> const Trie & {
+    [[nodiscard]]
+    auto trie() const noexcept -> const Trie & {
         return trie_;
     }
 
@@ -266,7 +278,8 @@ private:
 
     // Sort entries by word; the stable sort keeps load order among equal words, so keeping the last of each run
     // applies the precedence Trie::build gives duplicates.
-    [[nodiscard]] static auto sorted_last_entries(std::vector<RawEntry> entries) -> std::vector<RawEntry> {
+    [[nodiscard]]
+    static auto sorted_last_entries(std::vector<RawEntry> entries) -> std::vector<RawEntry> {
         std::ranges::stable_sort(entries, std::ranges::less{}, &RawEntry::word);
         auto last = std::vector<RawEntry>{};
         last.reserve(entries.size());
@@ -287,7 +300,8 @@ private:
     }
 
     // Normalize by the main dictionary total fixed at load time, shared by loaded and runtime user words.
-    [[nodiscard]] auto freq_weight(int f) const -> detail::WordWeight {
+    [[nodiscard]]
+    auto freq_weight(int f) const -> detail::WordWeight {
         assert_check([&] { return f > 0 && std::isfinite(freq_sum_) && freq_sum_ > 0.0; },
                      "DictTrie: invalid frequency normalization");
         if constexpr (compile_config::segmentation_style == SegmentationStyle::CPP) {
@@ -353,8 +367,8 @@ private:
     }
 
     // Phases 1–3 of the pipeline, shared with level_order() so snapshots apply the same parsing rules.
-    [[nodiscard]] static auto parse_sources(const DictSource &dict, std::span<const DictSource> user_dicts)
-        -> ParsedSources {
+    [[nodiscard]]
+    static auto parse_sources(const DictSource &dict, std::span<const DictSource> user_dicts) -> ParsedSources {
         auto parsed = ParsedSources{};
         auto &entries = parsed.entries;
 

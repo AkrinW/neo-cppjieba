@@ -56,16 +56,19 @@ public:
     auto operator=(const HMModel &) -> HMModel & = delete;
 
     // Copying the emission tables stays explicit at call sites.
-    [[nodiscard]] auto clone() const -> HMModel {
+    [[nodiscard]]
+    auto clone() const -> HMModel {
         return HMModel{*this};
     }
 
-    [[nodiscard]] constexpr auto get_start_prob(HMMState state) const noexcept -> double {
+    [[nodiscard]]
+    constexpr auto get_start_prob(HMMState state) const noexcept -> double {
         assert_check([=] { return static_cast<size_t>(state) < kHMMStatesNum; }, "HMModel: invalid start state");
         return start_prob[static_cast<size_t>(state)];
     }
 
-    [[nodiscard]] constexpr auto get_trans_prob(HMMState from, HMMState to) const noexcept -> double {
+    [[nodiscard]]
+    constexpr auto get_trans_prob(HMMState from, HMMState to) const noexcept -> double {
         assert_check([=] { return static_cast<size_t>(from) < kHMMStatesNum; },
                      "HMModel: invalid transition source state");
         assert_check([=] { return static_cast<size_t>(to) < kHMMStatesNum; },
@@ -76,7 +79,8 @@ public:
     // ── Query interface ──────────────────────────────────────────────────
 
     /// Look up one state's emission probability of `key`; absent entries return MIN_DOUBLE.
-    [[nodiscard]] auto get_emit_prob(HMMState state, Rune key) const noexcept -> double {
+    [[nodiscard]]
+    auto get_emit_prob(HMMState state, Rune key) const noexcept -> double {
         assert_check([=] { return static_cast<size_t>(state) < kHMMStatesNum; }, "HMModel: invalid emission state");
         return get_emit_probs(key)[static_cast<size_t>(state)];
     }
@@ -97,7 +101,8 @@ private:
 
     // Viterbi calls get_emit_probs once per rune, so it is forced inline; the hash lookup for runes outside the dense
     // interval stays out of it, keeping that rare path from being copied into every caller.
-    [[nodiscard]] auto get_sparse_emit_probs(Rune key) const noexcept -> EmitProbabilities {
+    [[nodiscard]]
+    auto get_sparse_emit_probs(Rune key) const noexcept -> EmitProbabilities {
         const auto it = supplementary_emit_probs_.find(key);
         return it != supplementary_emit_probs_.end() ? it->second : kMissingEmitProbs;
     }

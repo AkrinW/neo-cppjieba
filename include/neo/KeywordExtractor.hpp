@@ -57,12 +57,14 @@ public:
     auto operator=(const TfIdfExtractor &) -> TfIdfExtractor & = delete;
 
     // Copying the IDF table and stop words stays explicit at call sites.
-    [[nodiscard]] auto clone() const -> TfIdfExtractor {
+    [[nodiscard]]
+    auto clone() const -> TfIdfExtractor {
         return TfIdfExtractor{*this};
     }
 
     template <StringLike Input>
-    [[nodiscard]] auto extract(const Jieba &jieba, const Input &input, size_t top_n, const TfIdfOptions &options) const
+    [[nodiscard]]
+    auto extract(const Jieba &jieba, const Input &input, size_t top_n, const TfIdfOptions &options) const
         -> std::vector<Keyword<output_char_type_t<Input>>> {
         auto workspace = KeywordWorkspace{};
         auto result = std::vector<Keyword<output_char_type_t<Input>>>{};
@@ -82,7 +84,8 @@ public:
     }
 
     // Words missing from the IDF file use the average of its values.
-    [[nodiscard]] auto idf_average() const noexcept -> double {
+    [[nodiscard]]
+    auto idf_average() const noexcept -> double {
         return idf_.average();
     }
 
@@ -113,13 +116,14 @@ public:
     auto operator=(const TextRankExtractor &) -> TextRankExtractor & = delete;
 
     // Copying the stop words stays explicit at call sites.
-    [[nodiscard]] auto clone() const -> TextRankExtractor {
+    [[nodiscard]]
+    auto clone() const -> TextRankExtractor {
         return TextRankExtractor{*this};
     }
 
     template <StringLike Input>
-    [[nodiscard]] auto extract(const Jieba &jieba, const Input &input, size_t top_n,
-                               const TextRankOptions &options) const
+    [[nodiscard]]
+    auto extract(const Jieba &jieba, const Input &input, size_t top_n, const TextRankOptions &options) const
         -> std::vector<Keyword<output_char_type_t<Input>>> {
         auto workspace = KeywordWorkspace{};
         auto result = std::vector<Keyword<output_char_type_t<Input>>>{};

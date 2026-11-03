@@ -46,6 +46,8 @@ AllowShortLambdasOnASingleLine: Inline
 AllowShortLoopsOnASingleLine: false
 AlwaysBreakTemplateDeclarations: Yes
 AlignEscapedNewlines: Left
+# Attribute groups before a declaration take their own line; list several in one group: [[nodiscard, NEO_FORCE_INLINE]].
+BreakAfterAttributes: Always
 
 SortIncludes: true
 IncludeBlocks: Regroup

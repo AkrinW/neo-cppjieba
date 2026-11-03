@@ -77,7 +77,8 @@ constexpr auto size_below_capacity(std::size_t size) noexcept -> bool {
 // the container they index, so the value is kept even when RuneIndex is wider than size_t, as with 128 bits.
 template <typename Index>
     requires std::integral<Index> || CapacityInteger<Index>
-[[nodiscard]] constexpr auto to_index(Index position) noexcept -> std::size_t {
+[[nodiscard]]
+constexpr auto to_index(Index position) noexcept -> std::size_t {
     return static_cast<std::size_t>(position);
 }
 

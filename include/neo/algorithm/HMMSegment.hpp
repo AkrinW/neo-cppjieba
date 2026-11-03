@@ -28,8 +28,9 @@ struct HMMTransition {
 };
 
 // Python and Rust consider only legal predecessors and select the higher state on a tie.
-[[nodiscard]] inline auto style_hmm_transition(const HMModel &model, const EmitProbabilities &weights, double emit,
-                                               HMMState state) noexcept -> HMMTransition {
+[[nodiscard]]
+inline auto style_hmm_transition(const HMModel &model, const EmitProbabilities &weights, double emit,
+                                 HMMState state) noexcept -> HMMTransition {
     assert(static_cast<size_t>(state) < kHMMStatesNum);
     constexpr auto predecessors =
         std::array{std::array{HMMState::E, HMMState::S}, std::array{HMMState::B, HMMState::M},
@@ -152,7 +153,8 @@ inline auto hmm_internal_cut(const HMModel &model, std::span<const Rune> runes, 
 
 /// Find the end position of a consecutive ASCII letter sequence starting at `begin`.
 /// Returns `begin` if runes[begin] is not a letter.
-[[nodiscard]] constexpr auto sequential_letter_end(std::span<const Rune> runes, RuneIndex begin, RuneIndex end) noexcept
+[[nodiscard]]
+constexpr auto sequential_letter_end(std::span<const Rune> runes, RuneIndex begin, RuneIndex end) noexcept
     -> RuneIndex {
     assert_check([&] { return begin < end && end <= runes.size(); }, "HMMSegment: invalid ASCII letter range");
     auto r = runes[to_index(begin)];
@@ -173,8 +175,8 @@ inline auto hmm_internal_cut(const HMModel &model, std::span<const Rune> runes, 
 
 /// Find the end position of a consecutive number sequence starting at `begin`.
 /// Returns `begin` if runes[begin] is not a digit.
-[[nodiscard]] constexpr auto number_end(std::span<const Rune> runes, RuneIndex begin, RuneIndex end) noexcept
-    -> RuneIndex {
+[[nodiscard]]
+constexpr auto number_end(std::span<const Rune> runes, RuneIndex begin, RuneIndex end) noexcept -> RuneIndex {
     assert_check([&] { return begin < end && end <= runes.size(); }, "HMMSegment: invalid ASCII number range");
     auto r = runes[to_index(begin)];
     if ('0' > r || r > '9') {

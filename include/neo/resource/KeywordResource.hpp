@@ -26,11 +26,13 @@ public:
     auto operator=(StopWords &&) noexcept -> StopWords & = default;
     auto operator=(const StopWords &) -> StopWords & = delete;
 
-    [[nodiscard]] auto clone() const -> StopWords {
+    [[nodiscard]]
+    auto clone() const -> StopWords {
         return StopWords{*this};
     }
 
-    [[nodiscard]] auto contains(std::u32string_view word) const -> bool {
+    [[nodiscard]]
+    auto contains(std::u32string_view word) const -> bool {
         return words_.contains(word);
     }
 
@@ -61,17 +63,20 @@ public:
     auto operator=(IdfTable &&) noexcept -> IdfTable & = default;
     auto operator=(const IdfTable &) -> IdfTable & = delete;
 
-    [[nodiscard]] auto clone() const -> IdfTable {
+    [[nodiscard]]
+    auto clone() const -> IdfTable {
         return IdfTable{*this};
     }
 
     // The word's IDF, or the average for words missing from the table.
-    [[nodiscard]] auto idf(std::u32string_view word) const -> double {
+    [[nodiscard]]
+    auto idf(std::u32string_view word) const -> double {
         const auto it = table_.find(word);
         return it != table_.end() ? it->second : average_;
     }
 
-    [[nodiscard]] auto average() const noexcept -> double {
+    [[nodiscard]]
+    auto average() const noexcept -> double {
         return average_;
     }
 

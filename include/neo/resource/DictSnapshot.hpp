@@ -53,8 +53,8 @@ inline constexpr auto kSnapshotEdgeChild = std::uint8_t{1};
 inline constexpr auto kSnapshotEdgeValue = std::uint8_t{2};
 
 // Section encodings this build decodes. Raising an encoding keeps the earlier ones listed and decodable.
-[[nodiscard]] constexpr auto snapshot_encoding_supported(SnapshotSection kind, std::uint16_t encoding) noexcept
-    -> bool {
+[[nodiscard]]
+constexpr auto snapshot_encoding_supported(SnapshotSection kind, std::uint16_t encoding) noexcept -> bool {
     switch (kind) {
         case SnapshotSection::Meta:
         case SnapshotSection::Tags:
@@ -70,7 +70,8 @@ inline constexpr auto kSnapshotEdgeValue = std::uint8_t{2};
 
 // Content rules whose snapshots this build reads. Keep an older value only while text loading under the current
 // rules would build the same dictionary from the same sources; otherwise its snapshots must be regenerated.
-[[nodiscard]] constexpr auto snapshot_content_rules_supported(std::uint32_t rules) noexcept -> bool {
+[[nodiscard]]
+constexpr auto snapshot_content_rules_supported(std::uint32_t rules) noexcept -> bool {
     switch (rules) {
         case kDictContentRules: {
             return true;
@@ -82,7 +83,8 @@ inline constexpr auto kSnapshotEdgeValue = std::uint8_t{2};
 }
 
 // Format codes keep snapshots independent of the option enum's values.
-[[nodiscard]] constexpr auto snapshot_option_code(UserWordWeightOption opt) noexcept -> std::uint8_t {
+[[nodiscard]]
+constexpr auto snapshot_option_code(UserWordWeightOption opt) noexcept -> std::uint8_t {
     switch (opt) {
         case UserWordWeightOption::WordWeightMin: {
             return 0;
@@ -102,7 +104,8 @@ inline constexpr auto kSnapshotEdgeValue = std::uint8_t{2};
 }
 
 // Decode a stored option code; an unknown code is invalid snapshot data.
-[[nodiscard]] inline auto snapshot_option(std::uint8_t code, std::string_view name) -> UserWordWeightOption {
+[[nodiscard]]
+inline auto snapshot_option(std::uint8_t code, std::string_view name) -> UserWordWeightOption {
     switch (code) {
         case 0: {
             return UserWordWeightOption::WordWeightMin;
@@ -129,16 +132,19 @@ public:
     }
 
     template <std::unsigned_integral T>
-    [[nodiscard]] auto read() -> T {
+    [[nodiscard]]
+    auto read() -> T {
         return load_le<T>(take(sizeof(T)));
     }
 
-    [[nodiscard]] auto read_bytes(std::size_t count) -> std::span<const std::byte> {
+    [[nodiscard]]
+    auto read_bytes(std::size_t count) -> std::span<const std::byte> {
         return take(count);
     }
 
     // Read an element count and reject one the remaining bytes cannot hold, before anything is allocated for it.
-    [[nodiscard]] auto read_count(std::size_t element_size) -> std::size_t {
+    [[nodiscard]]
+    auto read_count(std::size_t element_size) -> std::size_t {
         const auto count = read<std::uint64_t>();
         check(count <= rest_.size() / element_size, "DictSnapshot: {} {} holds fewer bytes than its count {}", name_,
               region_, count);
@@ -182,8 +188,8 @@ struct SnapshotSections {
 };
 
 // The slot for a section kind this build understands, or null for an unknown kind.
-[[nodiscard]] inline auto snapshot_section_slot(SnapshotSections &sections, std::uint32_t kind) noexcept
-    -> SnapshotSectionView * {
+[[nodiscard]]
+inline auto snapshot_section_slot(SnapshotSections &sections, std::uint32_t kind) noexcept -> SnapshotSectionView * {
     switch (static_cast<SnapshotSection>(kind)) {
         case SnapshotSection::Meta: {
             return &sections.meta;
@@ -243,8 +249,8 @@ inline auto check_snapshot_checksum(std::uint32_t kind, std::uint64_t expected, 
 }
 
 // Locate the sections of a format version 1 snapshot after checking its size, checksum and table bounds.
-[[nodiscard]] inline auto locate_snapshot_v1_sections(std::span<const std::byte> bytes, std::string_view name)
-    -> SnapshotSections {
+[[nodiscard]]
+inline auto locate_snapshot_v1_sections(std::span<const std::byte> bytes, std::string_view name) -> SnapshotSections {
     auto header = SnapshotReader{bytes, "header", name};
     header.skip(kSnapshotMagic.size() + sizeof(std::uint32_t));
     const auto header_size = header.read<std::uint32_t>();
@@ -276,8 +282,8 @@ struct SnapshotMeta {
 };
 
 // Meta encoding 1: content rules, option code and the main-dictionary frequency statistics.
-[[nodiscard]] inline auto decode_snapshot_meta_v1(std::span<const std::byte> payload, std::string_view name)
-    -> SnapshotMeta {
+[[nodiscard]]
+inline auto decode_snapshot_meta_v1(std::span<const std::byte> payload, std::string_view name) -> SnapshotMeta {
     auto reader = SnapshotReader{payload, "meta section", name};
     const auto rules = reader.read<std::uint32_t>();
     check(snapshot_content_rules_supported(rules),
@@ -295,8 +301,8 @@ struct SnapshotMeta {
 }
 
 // Tags encoding 1: a count, then each tag as a length byte and its bytes.
-[[nodiscard]] inline auto decode_snapshot_tags_v1(std::span<const std::byte> payload, std::string_view name)
-    -> std::vector<PosTag> {
+[[nodiscard]]
+inline auto decode_snapshot_tags_v1(std::span<const std::byte> payload, std::string_view name) -> std::vector<PosTag> {
     auto reader = SnapshotReader{payload, "tag section", name};
     const auto count = reader.read_count(1);
     auto tags = std::vector<PosTag>{};
@@ -320,8 +326,9 @@ struct SnapshotTrie {
 
 // Trie encoding 1: node, edge and value counts, then fanouts, edges as (rune, flags) and values as
 // (frequency, tag index).
-[[nodiscard]] inline auto decode_snapshot_trie_v1(std::span<const std::byte> payload, std::span<const PosTag> tags,
-                                                  std::string_view name) -> SnapshotTrie {
+[[nodiscard]]
+inline auto decode_snapshot_trie_v1(std::span<const std::byte> payload, std::span<const PosTag> tags,
+                                    std::string_view name) -> SnapshotTrie {
     auto reader = SnapshotReader{payload, "trie section", name};
     const auto node_count = reader.read_count(sizeof(std::uint32_t));
     const auto edge_count = reader.read_count(sizeof(std::uint32_t) + 1);
@@ -352,8 +359,9 @@ struct SnapshotTrie {
 }
 
 // Single-rune user words encoding 1: a count, then the runes.
-[[nodiscard]] inline auto decode_snapshot_user_single_runes_v1(std::span<const std::byte> payload,
-                                                               std::string_view name) -> std::vector<Rune> {
+[[nodiscard]]
+inline auto decode_snapshot_user_single_runes_v1(std::span<const std::byte> payload, std::string_view name)
+    -> std::vector<Rune> {
     auto reader = SnapshotReader{payload, "single-rune user word section", name};
     const auto count = reader.read_count(sizeof(std::uint32_t));
     auto runes = std::vector<Rune>{};
@@ -366,8 +374,8 @@ struct SnapshotTrie {
 }
 
 // Dispatch each section to the decoder of its encoding; add_snapshot_section admitted only listed encodings.
-[[nodiscard]] inline auto decode_snapshot_meta(const SnapshotSectionView &section, std::string_view name)
-    -> SnapshotMeta {
+[[nodiscard]]
+inline auto decode_snapshot_meta(const SnapshotSectionView &section, std::string_view name) -> SnapshotMeta {
     switch (section.encoding) {
         case 1: {
             return decode_snapshot_meta_v1(section.payload, name);
@@ -379,8 +387,8 @@ struct SnapshotTrie {
     }
 }
 
-[[nodiscard]] inline auto decode_snapshot_tags(const SnapshotSectionView &section, std::string_view name)
-    -> std::vector<PosTag> {
+[[nodiscard]]
+inline auto decode_snapshot_tags(const SnapshotSectionView &section, std::string_view name) -> std::vector<PosTag> {
     switch (section.encoding) {
         case 1: {
             return decode_snapshot_tags_v1(section.payload, name);
@@ -392,8 +400,9 @@ struct SnapshotTrie {
     }
 }
 
-[[nodiscard]] inline auto decode_snapshot_trie(const SnapshotSectionView &section, std::span<const PosTag> tags,
-                                               std::string_view name) -> SnapshotTrie {
+[[nodiscard]]
+inline auto decode_snapshot_trie(const SnapshotSectionView &section, std::span<const PosTag> tags,
+                                 std::string_view name) -> SnapshotTrie {
     switch (section.encoding) {
         case 1: {
             return decode_snapshot_trie_v1(section.payload, tags, name);
@@ -405,7 +414,8 @@ struct SnapshotTrie {
     }
 }
 
-[[nodiscard]] inline auto decode_snapshot_user_single_runes(const SnapshotSectionView &section, std::string_view name)
+[[nodiscard]]
+inline auto decode_snapshot_user_single_runes(const SnapshotSectionView &section, std::string_view name)
     -> std::vector<Rune> {
     switch (section.encoding) {
         case 1: {
@@ -420,8 +430,8 @@ struct SnapshotTrie {
 
 // Decode the sections into the canonical dictionary and validate it; format versions sharing these sections
 // share this step.
-[[nodiscard]] inline auto decode_snapshot_sections(const SnapshotSections &sections, std::string_view name)
-    -> LevelOrderDict {
+[[nodiscard]]
+inline auto decode_snapshot_sections(const SnapshotSections &sections, std::string_view name) -> LevelOrderDict {
     check(sections.meta.present && sections.tags.present && sections.trie.present && sections.user_single_runes.present,
           "DictSnapshot: {} lacks a required section", name);
     const auto meta = decode_snapshot_meta(sections.meta, name);
@@ -441,8 +451,8 @@ struct SnapshotTrie {
 
 /// Decode and validate snapshot bytes into the canonical dictionary; name labels diagnostics.
 /// Every format version a released build wrote keeps its case here.
-[[nodiscard]] inline auto decode_dict_snapshot(std::span<const std::byte> bytes, std::string_view name)
-    -> LevelOrderDict {
+[[nodiscard]]
+inline auto decode_dict_snapshot(std::span<const std::byte> bytes, std::string_view name) -> LevelOrderDict {
     check(bytes.size() >= kSnapshotPrefixSize
               && std::ranges::equal(bytes.first(kSnapshotMagic.size()), std::as_bytes(std::span{kSnapshotMagic})),
           "DictSnapshot: {} is not a neo-cppjieba dictionary snapshot", name);
@@ -469,7 +479,8 @@ struct EncodedSnapshotSection {
 };
 
 // The distinct tags of the values in byte order; trie values refer to them by index.
-[[nodiscard]] inline auto snapshot_tag_table(std::span<const LevelOrderValue> values) -> std::vector<PosTag> {
+[[nodiscard]]
+inline auto snapshot_tag_table(std::span<const LevelOrderValue> values) -> std::vector<PosTag> {
     auto tags = std::vector<PosTag>{};
     tags.reserve(values.size());
     std::ranges::transform(values, std::back_inserter(tags), &LevelOrderValue::tag);
@@ -482,7 +493,8 @@ struct EncodedSnapshotSection {
     return tags;
 }
 
-[[nodiscard]] inline auto encode_snapshot_meta_v1(const LevelOrderDict &dict) -> EncodedSnapshotSection {
+[[nodiscard]]
+inline auto encode_snapshot_meta_v1(const LevelOrderDict &dict) -> EncodedSnapshotSection {
     auto payload = std::vector<std::byte>{};
     append_le(payload, kDictContentRules);
     append_le(payload, snapshot_option_code(dict.user_word_weight_opt));
@@ -493,7 +505,8 @@ struct EncodedSnapshotSection {
     return {SnapshotSection::Meta, 1, kSnapshotSectionRequired, std::move(payload)};
 }
 
-[[nodiscard]] inline auto encode_snapshot_tags_v1(std::span<const PosTag> tags) -> EncodedSnapshotSection {
+[[nodiscard]]
+inline auto encode_snapshot_tags_v1(std::span<const PosTag> tags) -> EncodedSnapshotSection {
     auto payload = std::vector<std::byte>{};
     append_le(payload, static_cast<std::uint64_t>(tags.size()));
     for (const auto &tag : tags) {
@@ -505,7 +518,8 @@ struct EncodedSnapshotSection {
     return {SnapshotSection::Tags, 1, kSnapshotSectionRequired, std::move(payload)};
 }
 
-[[nodiscard]] inline auto encode_snapshot_trie_v1(const LevelOrderDict &dict, std::span<const PosTag> tags)
+[[nodiscard]]
+inline auto encode_snapshot_trie_v1(const LevelOrderDict &dict, std::span<const PosTag> tags)
     -> EncodedSnapshotSection {
     const auto &[fanouts, edges] = dict.shape;
     auto payload = std::vector<std::byte>{};
@@ -534,7 +548,8 @@ struct EncodedSnapshotSection {
     return {SnapshotSection::Trie, 1, kSnapshotSectionRequired, std::move(payload)};
 }
 
-[[nodiscard]] inline auto encode_snapshot_user_single_runes_v1(std::span<const Rune> runes) -> EncodedSnapshotSection {
+[[nodiscard]]
+inline auto encode_snapshot_user_single_runes_v1(std::span<const Rune> runes) -> EncodedSnapshotSection {
     auto payload = std::vector<std::byte>{};
     payload.reserve(sizeof(std::uint64_t) + runes.size() * sizeof(std::uint32_t));
     append_le(payload, static_cast<std::uint64_t>(runes.size()));
@@ -546,8 +561,8 @@ struct EncodedSnapshotSection {
 
 // Lay out the format version 1 header, section table and payloads, then seal the checksum over everything after
 // the header.
-[[nodiscard]] inline auto assemble_snapshot_v1(std::span<const EncodedSnapshotSection> sections)
-    -> std::vector<std::byte> {
+[[nodiscard]]
+inline auto assemble_snapshot_v1(std::span<const EncodedSnapshotSection> sections) -> std::vector<std::byte> {
     auto offset = kSnapshotV1HeaderSize + sections.size() * kSnapshotV1EntrySize;
     auto total = offset;
     for (const auto &section : sections) {
@@ -583,7 +598,8 @@ struct EncodedSnapshotSection {
 }
 
 /// Encode a canonical dictionary in the current format version; equal dictionaries give equal bytes.
-[[nodiscard]] inline auto encode_dict_snapshot(const LevelOrderDict &dict) -> std::vector<std::byte> {
+[[nodiscard]]
+inline auto encode_dict_snapshot(const LevelOrderDict &dict) -> std::vector<std::byte> {
     assert_check([&] { return level_order_dict_error(dict).empty(); },
                  "DictSnapshot: cannot encode an invalid level-order dictionary");
     const auto tags = snapshot_tag_table(dict.values);
@@ -598,7 +614,8 @@ struct EncodedSnapshotSection {
 
 /// Build a dictionary from a snapshot. A file is read into owned memory before decoding, so later changes to it
 /// cannot reach the dictionary; a change during the read fails the checksum.
-[[nodiscard]] inline auto load_dict_snapshot(const SnapshotSource &source) -> DictTrie {
+[[nodiscard]]
+inline auto load_dict_snapshot(const SnapshotSource &source) -> DictTrie {
     return with_snapshot_bytes(source, [](std::span<const std::byte> bytes, std::string_view name) {
         return DictTrie{decode_dict_snapshot(bytes, name)};
     });

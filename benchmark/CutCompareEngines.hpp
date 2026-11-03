@@ -50,9 +50,10 @@ public:
     OldEngine(const OldEngine &) = delete;
     auto operator=(const OldEngine &) -> OldEngine & = delete;
 
-    [[nodiscard]] auto cut(const std::string &line, CompareMode mode) const -> std::vector<std::string>;
-    [[nodiscard]] auto bench(const std::vector<std::string> &lines, CompareMode mode, std::size_t rounds) const
-        -> CutMeasurement;
+    [[nodiscard]]
+    auto cut(const std::string &line, CompareMode mode) const -> std::vector<std::string>;
+    [[nodiscard]]
+    auto bench(const std::vector<std::string> &lines, CompareMode mode, std::size_t rounds) const -> CutMeasurement;
 
 private:
     struct Impl;
@@ -68,11 +69,13 @@ public:
     NeoEngine(const NeoEngine &) = delete;
     auto operator=(const NeoEngine &) -> NeoEngine & = delete;
 
-    [[nodiscard]] auto cut_strings(const std::string &line, CompareMode mode) const -> std::vector<std::string>;
+    [[nodiscard]]
+    auto cut_strings(const std::string &line, CompareMode mode) const -> std::vector<std::string>;
     // Throw unless the borrowed and reused outputs of line spell exactly the expected string tokens.
     auto verify_outputs(const std::string &line, CompareMode mode, const std::vector<std::string> &expected) -> void;
-    [[nodiscard]] auto bench(const std::vector<std::string> &lines, CompareMode mode, NeoOutput output,
-                             std::size_t rounds) -> CutMeasurement;
+    [[nodiscard]]
+    auto bench(const std::vector<std::string> &lines, CompareMode mode, NeoOutput output, std::size_t rounds)
+        -> CutMeasurement;
     // Write the UTF-8 byte range of every token as a JSON array of per-line [begin, end] pairs.
     auto write_ranges(std::ostream &out, CompareMode mode, const std::vector<std::string> &lines) -> void;
 

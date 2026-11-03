@@ -301,7 +301,8 @@ inline auto style_python_full_block(const DictTrie &dict, std::span<const Rune> 
 }
 
 // Outside Rust FULL's CJK blocks, ASCII alphanumerics, plus, hash and LF form runs.
-[[nodiscard]] constexpr auto is_rust_full_run(Rune rune) noexcept -> bool {
+[[nodiscard]]
+constexpr auto is_rust_full_run(Rune rune) noexcept -> bool {
     return is_ascii_alphanumeric(rune) || rune == U'+' || rune == U'#' || rune == U'\n';
 }
 

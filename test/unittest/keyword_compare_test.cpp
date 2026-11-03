@@ -108,7 +108,8 @@ auto corpus() -> std::vector<std::string> {
 
 class KeywordCompareTest : public testing::TestWithParam<bool> {
 protected:
-    [[nodiscard]] auto user_dict() const -> std::string_view {
+    [[nodiscard]]
+    auto user_dict() const -> std::string_view {
         return GetParam() ? USER_DICT_FILE : std::string_view{};
     }
 };
