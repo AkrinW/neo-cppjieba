@@ -39,7 +39,7 @@ cmake --install build-library --prefix install
 在应用中使用安装后的包：
 
 ```cmake
-find_package(neo_cppjieba 1.2 CONFIG REQUIRED)
+find_package(neo_cppjieba 2.0 CONFIG REQUIRED)
 target_link_libraries(my_app PRIVATE neo_cppjieba::neo_cppjieba)
 ```
 
@@ -53,7 +53,7 @@ target_link_libraries(my_app PRIVATE neo_cppjieba::neo_cppjieba)
 | C++ CMake 包 | `lib/cmake/neo_cppjieba/` |
 | C API CMake 包（启用时） | `lib/cmake/neo_cppjieba_c/` |
 
-部署时携带词典和模型，并将实际路径传给分词器。`find_package` 之后，
+程序部署时需要带上词典和模型，并把实际路径传给分词器。`find_package` 之后，
 `neo_cppjieba_DICT_DIR` 给出安装包中的词典目录，可用于测试或复制到部署目录。
 手工集成时，把 `include/` 加入头文件搜索路径，并启用 C++23 和 MSVC 的 UTF-8 源码选项。
 
@@ -63,11 +63,11 @@ target_link_libraries(my_app PRIVATE neo_cppjieba::neo_cppjieba)
 即可链接 `neo_cppjieba::icu`。安装消费端通过 `COMPONENTS icu` 选择该组件：
 
 ```cmake
-find_package(neo_cppjieba 1.2 CONFIG REQUIRED COMPONENTS icu)
+find_package(neo_cppjieba 2.0 CONFIG REQUIRED COMPONENTS icu)
 target_link_libraries(my_app PRIVATE neo_cppjieba::icu)
 ```
 
-核心目标使用随库头文件和标准库；ICU 在选择 `icu` 组件时查找。
+核心目标只依赖随库头文件和标准库，选择 `icu` 组件时才查找 ICU。
 转换接口及 `ICU_ROOT` 配置见 [编码指南](encoding.md)。
 
 `CPPJIEBA_BUILD_C_API=ON` 增加共享库、静态库和纯 C 头文件。
@@ -89,7 +89,7 @@ target_link_libraries(my_app PRIVATE neo_cppjieba::icu)
 | `CPPJIEBA_BUILD_FUZZERS` | OFF | 构建 libFuzzer 目标，要求 Clang |
 | `CPPJIEBA_INSTALL_LEGACY_DICT_DIR` | OFF | 过渡选项：词典同时安装到 1.2 及更早版本的 `share/cppjieba/dict/` |
 
-C API 至少选择一种库形式。测试与比较依赖的版本、初始化和离线配置见 [依赖指南](../deps/README.md)。
+启用 C API 时至少保留一种库形式。测试与比较依赖的版本、初始化和离线配置见 [依赖指南](../deps/README.md)。
 
 ## 测试
 
@@ -132,7 +132,7 @@ LLVM 23 来自 apt.llvm.org，软件源由 `tools/add-llvm-apt-source.sh` 添加
   `CLANG_FORMAT`、`CLANG_TIDY` 指定工具路径；`GCC_TOOLCHAIN` 设为空值时使用编译器默认的 GCC。
 - 警告即错误任务覆盖全部容量变体。窄容量类型的运算经整数提升变为 `int`，库代码在原本隐式缩回的位置写出显式转换，
   `-O3` 下生成的机器码与改写前逐函数一致。以 `RuneIndex` 作容器下标时经 `detail::to_index` 显式转换为 `size_t`，
-  128 位变体因此也无需关闭转换警告；下标不超过被访问容器的长度，转换不丢失数值。
+  128 位变体因此同样开启转换警告；下标总在被访问容器的长度之内，转换保留原值。
 - Sanitizer 与覆盖率构建同时启用共享和静态 C ABI。GCC 的 sanitizer 运行库以动态库链接，满足共享库的 `-z defs`；
   sanitizer 会替换分配器，因此 sanitizer 任务跳过检查私有运行库的 `neo_c_api_symbols` 和 `neo_c_api_c_host`，
   二者由 C API 工作流在常规构建中运行。

@@ -1,8 +1,7 @@
 # 应用示例
 
-这些示例分别演示一种应用场景，每个 `.cpp` 都可以独立阅读和修改。全部通过 `Jieba` 分词，
-词典与 HMM 模型在程序启动时加载一次；示例使用 UTF-8 输入，第三个构造参数 `""` 表示仅使用主词典。
-需要业务词典时，将它换成自己的词典文件路径。
+每个示例演示一种应用场景，`.cpp` 文件可以单独阅读和修改。示例在启动时加载一次词典和 HMM 模型，输入为 UTF-8；
+第三个构造参数 `""` 表示只用主词典，需要业务词典时换成自己的文件路径。
 
 从仓库根目录构建，需要支持 C++23（包括 `<print>`）的编译器：
 
@@ -41,16 +40,16 @@ cmake --build build-examples --config Release --parallel
 日常文本可从 `MIX` 开始，搜索索引可选择 `SEARCH`。
 完整模式表见 [C++ 使用指南](../docs/usage.md#分词模式)。
 
-批量示例每行输出一行，用方括号分隔 token；空行仍输出空行：
+批量示例对每个输入行输出一行，token 用方括号括起，空行照样输出为空行：
 
 ```sh
 printf '中国科学院\n我来到北京清华大学\n' | ./build-examples/examples/jieba_batch_cut dict
 ./build-examples/examples/jieba_batch_cut dict < test/testdata/testlines.utf8
 ```
 
-`Workspace` 位于循环外，解码和算法缓冲跨行复用。`cut_with_workspace` 每次返回独立的位置数组，
-其中的词视图仍借用当前输入行，因此示例在下一次 `getline` 改写原文前完成输出。
-同时需要复用输出数组时，可改用 `cut_into`：
+`Workspace` 放在循环外，解码和算法缓冲跨行复用。`cut_with_workspace` 每次返回新的位置数组，
+其中的词视图指向当前输入行，所以示例在下一次 `getline` 改写该行之前完成输出。
+输出数组也要复用时，改用 `cut_into`：
 
 ```cpp
 neo_cppjieba::Workspace workspace;
@@ -58,9 +57,8 @@ std::vector<neo_cppjieba::TokenPosition> positions;
 jieba.cut_into(text, neo_cppjieba::CutMode::MIX, positions, workspace);
 ```
 
-工作区由调用方决定生命周期，也可以在用户代码中声明为 `thread_local`。
-同一工作区同一时刻只服务一次调用；并发或 visitor 内嵌套分词使用不同工作区。
-`workspace.release()` 可主动释放保留的缓冲。
+工作区的生命周期由调用方决定，也可以声明为 `thread_local`。一个工作区同一时刻服务一次调用，
+并发调用或在 visitor 内嵌套分词时各用一个工作区。调用 `workspace.release()` 可释放保留的缓冲。
 
 搜索示例匹配一个完整的 SEARCH token，并分别展示每次命中的高亮：
 
@@ -70,7 +68,7 @@ jieba.cut_into(text, neo_cppjieba::CutMode::MIX, positions, workspace);
 
 输出包含 `bytes=[6, 12) runes=[2, 4)` 和 `中国[科学]院`。
 UTF-8 字符串的 `substr` 使用 `position.source` 字节偏移；`position.runes` 用于 Unicode 码点定位。
-示例执行 token 精确匹配，多词查询由应用层组合处理。
+示例按 token 精确匹配，多词查询可在应用层组合。
 
 词频示例从标准输入读取文本，按词的字符串顺序输出 `次数<TAB>词`：
 
@@ -78,8 +76,8 @@ UTF-8 字符串的 `substr` 使用 `position.source` 字节偏移；`position.ru
 printf '北京\n北京\n上海\n' | ./build-examples/examples/jieba_word_count dict
 ```
 
-这里用 visitor 逐词累加计数。map 的 key 使用 `std::string` 拥有词文本，
-因此输入行被改写后仍然有效。示例统计所有分词结果，包括标点；停用词过滤可在 visitor 中添加。
+示例用 visitor 逐词计数。map 的 key 是持有词文本的 `std::string`，输入行被改写后计数依然有效。
+统计包含标点在内的全部 token，需要过滤停用词时可在 visitor 中添加。
 
 需要保存函数返回的结果时，运行所有权示例：
 
@@ -87,8 +85,8 @@ printf '北京\n北京\n上海\n' | ./build-examples/examples/jieba_word_count d
 ./build-examples/examples/jieba_owned_results dict '我来到北京清华大学'
 ```
 
-`tokenize_message` 把参数字符串移动给 `cut_owned`，返回值拥有整段原文及位置数组；函数返回后可继续读取。
-`cut_strings` 则返回每个词独立拥有存储的字符串数组。示例分别展示两种输出方式，应用通常选择其中一种。
-借用型 `cut` / `cut_with_workspace` 适合原文保持有效且稳定的场景；`cut_owned` 结果移动后应重新取得词视图。
+`tokenize_message` 把参数字符串移动给 `cut_owned`，返回值持有整段原文和位置数组，函数返回后仍可读取。
+`cut_strings` 返回每个词各自存储的字符串数组。示例同时展示两种方式，应用中选其一即可。
+原文在使用期间保持有效时，借用型的 `cut` / `cut_with_workspace` 开销最小；`cut_owned` 的结果被移动后，需重新获取词视图。
 
 退出码：成功为 0，用法错误为 2，词典、模型、输入编码或读取失败为 1。

@@ -203,10 +203,12 @@ jobs:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           mkdir -p benchmark/results/ci
+          cpu_model="$(awk -F': *' '/^model name/ { print $2; exit }' /proc/cpuinfo)"
           {
             printf '## Old C++ / Neo C++ / Rust / Python\n\n'
             printf 'Benchmark job: **%s**. [Workflow and reports](%s).\n\n' "$BENCHMARK_STATUS" "$RUN_URL"
             printf 'Head: `%s`; tested commit: `%s`.\n\n' "$PR_HEAD_SHA" "$TESTED_SHA"
+            printf 'Runner CPU: `%s`.\n\n' "${cpu_model:-unknown}"
             printf 'Release, one CPU, five samples; timings are observations without a performance gate.\n\n'
             printf 'These results compare implementations, not this PR against its base branch.\n\n'
             for corpus in testlines weicheng; do

@@ -1,12 +1,17 @@
 cmake_minimum_required(VERSION 3.20)
 project(cpp_api_consumer LANGUAGES CXX)
 
+# The package test passes the version from the main project's project() call.
+if(NOT CPPJIEBA_TEST_PACKAGE_VERSION)
+    message(FATAL_ERROR "Set CPPJIEBA_TEST_PACKAGE_VERSION to the requested neo_cppjieba version")
+endif()
 if(CPPJIEBA_TEST_OPTIONAL)
-    find_package(neo_cppjieba 1.2 CONFIG REQUIRED OPTIONAL_COMPONENTS ${CPPJIEBA_TEST_COMPONENT})
+    find_package(neo_cppjieba ${CPPJIEBA_TEST_PACKAGE_VERSION} CONFIG REQUIRED
+        OPTIONAL_COMPONENTS ${CPPJIEBA_TEST_COMPONENT})
 elseif(CPPJIEBA_TEST_COMPONENT)
-    find_package(neo_cppjieba 1.2 CONFIG REQUIRED COMPONENTS ${CPPJIEBA_TEST_COMPONENT})
+    find_package(neo_cppjieba ${CPPJIEBA_TEST_PACKAGE_VERSION} CONFIG REQUIRED COMPONENTS ${CPPJIEBA_TEST_COMPONENT})
 else()
-    find_package(neo_cppjieba 1.2 CONFIG REQUIRED)
+    find_package(neo_cppjieba ${CPPJIEBA_TEST_PACKAGE_VERSION} CONFIG REQUIRED)
 endif()
 
 add_executable(cpp_api_consumer ../../examples/basic_cut.cpp)

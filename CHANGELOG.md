@@ -1,6 +1,9 @@
 # Changelog
 
-## Unreleased
+## 2.0.0 - 2026-11-03
+
+本版补齐 CppJieba 的词性标注、关键词提取和运行时增删词，增加内存加载与词典快照，并把这些能力扩展到 C ABI v1。
+C++ 头文件按角色重新组织，公开 API 收缩到门面和结果类型；标为 **不兼容** 的条目需要调整代码，升级方式见文末。
 
 ### Added
 
@@ -19,7 +22,7 @@
   `Jieba`、`HMModel`、`TfIdfExtractor`、`TextRankExtractor` 增加对应构造函数；用户词典可有多个。
   见 [从内存加载词典](docs/usage.md#从内存加载词典)。
 - 新增词典快照：`Jieba::encode_dict_snapshot` 把主词典和用户词典编译为快照，`Jieba::write_dict_snapshot`
-  把它原子地写成文件，`Jieba::from_snapshot` 通过新的 `SnapshotSource`（文件或内存）加载。结果与从源词典加载完全相同，内置词典的加载时间约从 85 ms 降到 15 ms；
+  把它原子地写成文件，`Jieba::from_snapshot` 通过新的 `SnapshotSource`（文件或内存）加载。结果与从源词典加载完全相同，内置词典的加载时间约从 85 ms 降到 19 ms；
   新版本的库持续读取旧版本写出的快照。见 [词典快照](docs/usage.md#词典快照)。
 - 新增 `load_benchmark`：校验快照与文本加载的分词结果一致后，分阶段计时词典加载，`--cold` 在每轮前清除页缓存。
 - `Jieba` 支持运行时就地增删词：`add_word`、`add_word_with_freq`、`remove_word`，权重规则与用户词典一致，
@@ -119,9 +122,15 @@
   且无单字时跳过查询。
 - CI 每种工具链只用一个版本：Linux 任务从 Ubuntu 软件源安装 GCC 16，经 `tools/add-llvm-apt-source.sh` 从 apt.llvm.org
   安装 LLVM 23，与 macOS 的 Homebrew LLVM 23 一致；Clang 任务同时安装 libstdc++ 16。
+- HMM 对只含一个码点的片段直接输出单字词，跳过字母数字分组和 Viterbi；MIX 和 SEARCH 中孤立的单字路由词都经过这条路径。
+  MP、HMM、MIX 和 FULL 的结果容量改为按码点数预留，减少追加词语时的扩容。分词结果不变。
+- PR 的 benchmark 评论增加 runner 的 CPU 型号。GitHub 托管 runner 的硬件不固定，不同运行的绝对耗时最多相差约 2 倍，
+  跨运行比较前先核对型号。
 
 ### Upgrade notes
 
+- C++ 包版本升至 2.0，CMake 包按主版本匹配：把 `find_package(neo_cppjieba 1.2 ...)` 改为
+  `find_package(neo_cppjieba 2.0 ...)`。标为 **不兼容** 的条目逐项说明了替代写法。
 - 本版发布为 2.0.0。C ABI 仍是 v1：已有符号、结构布局和函数语义不变，共享库 SOVERSION 保持 1，
   已构建的程序无需重新编译。CMake 包版本随项目升至 2.0，C 用户把 `find_package(neo_cppjieba_c 1.2 ...)`
   改为 `find_package(neo_cppjieba_c 2.0 ...)`。

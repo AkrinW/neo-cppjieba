@@ -81,7 +81,8 @@ The standalone benchmark validates its inputs and reports timing observations.
 
 ## Instruction counts
 
-Timings on shared CI runners vary by several percent; instruction counts do not.
+Timings on shared CI runners vary between runs, by up to 2x when a run lands on different
+hardware; instruction counts repeat exactly.
 `instruction_workload` runs one phase per invocation — `load`, `snapshot_load`, `cut` (every mode),
 `tag` or `keywords` — over the repository dictionaries and `weicheng.utf8`, and each phase lives in its
 own `measure_<phase>` function, so callgrind can count it alone:
@@ -109,6 +110,8 @@ checks the standalone C++ benchmark configuration.
 All four implementations run serially on one allowed CPU of the same runner,
 using the common dictionary and HMM model. CI uses GCC 16, Rust 1.99.0 and Python
 3.14.8; comparison dependencies are pinned by submodule revisions and `Cargo.lock`.
+GitHub assigns hosted runners from a mixed hardware pool (AMD EPYC 7763, 9V74 and 9V45
+have all appeared), so compare ratios within one run rather than absolute times across runs.
 
 | Corpus | Rounds per sample | Samples |
 | --- | ---: | ---: |
@@ -133,7 +136,7 @@ of their platform jobs; the four-language measurements currently run on Linux x6
 Pull requests from branches in this repository also receive one benchmark comment,
 updated in place by `marocchino/sticky-pull-request-comment`. It reuses the Actions
 summary saved as `summary.md` in the report artifact, with the job status, head and
-tested revisions, and a link to the workflow and full reports. A separate job has
+tested revisions, the runner CPU model, and a link to the workflow and full reports. A separate job has
 `pull-requests: write` permission and reads only the artifact. It updates the comment
 only for the current head of an open PR; PR code executes in the measurement job.
 
