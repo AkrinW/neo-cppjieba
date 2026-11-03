@@ -1,4 +1,6 @@
-set(configure_args -G "${GENERATOR}" "-DCMAKE_BUILD_TYPE=${CONFIG}")
+# Consumers request the project's major.minor version, as the documented find_package calls do.
+set(configure_args -G "${GENERATOR}" "-DCMAKE_BUILD_TYPE=${CONFIG}"
+    "-DCPPJIEBA_TEST_PACKAGE_VERSION=${PACKAGE_REQUEST_VERSION}")
 if(NOT GENERATOR_PLATFORM STREQUAL "")
     list(APPEND configure_args -A "${GENERATOR_PLATFORM}")
 endif()
