@@ -30,6 +30,12 @@ For a release-to-release regression measurement, build both revisions with the
 same compiler and flags, pin them to the same CPU, and alternate their runs.
 Record source revisions and compare token sequences as well as timings.
 
+`cut_compare_benchmark.cpp` compiles old CppJieba, Neo and the Rust adapters in one translation unit, which
+sits at GCC's `inline-unit-growth` limit: an unrelated change can move a per-rune helper such as
+`decode_one_utf8` out of line and shift Neo timings by about 10%. When comparing two builds with GCC,
+configure both with `-DCMAKE_CXX_FLAGS=--param=inline-unit-growth=200`, and check that
+`nm -C cut_compare_benchmark | grep -E 'decode_one_utf8|checked_decode_step'` prints nothing for either.
+
 ```sh
 git submodule update --init deps/cppjieba deps/limonp
 cmake -S . -B build-bench -DCMAKE_BUILD_TYPE=Release \
