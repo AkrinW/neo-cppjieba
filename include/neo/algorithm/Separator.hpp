@@ -1,6 +1,7 @@
 #pragma once
 
 #include "neo/Config.hpp"
+#include "neo/simd/RuneMatch.hpp"
 #include "neo/util/Logging.hpp"
 
 #include <array>
@@ -63,11 +64,7 @@ inline auto get_pre_filter_separators(std::span<const char32_t> runes, std::vect
     auto n = static_cast<RuneIndex>(runes.size());
     out.clear();
     out.reserve(to_index(n / 8)); // heuristic: ~12.5% separators
-    for (auto i = RuneIndex{0}; i < n; ++i) {
-        if (is_default_separator_unlikely(runes[to_index(i)])) {
-            out.push_back(i);
-        }
-    }
+    simd::append_matches(runes, DEFAULT_SEPARATORS, is_default_separator_unlikely, out);
     // The end sentinel lets callers slice [previous + 1, next) without special-casing the last segment.
     out.push_back(n);
 }

@@ -93,7 +93,9 @@ target_link_libraries(my_app PRIVATE neo_cppjieba::icu)
   C ABI 库同样随所选级别编译，分发给他人的二进制宜保持 `OFF` 或基线级别。
 - 不经 CMake 集成时，自行定义 `CPPJIEBA_SIMD_SSE2`、`CPPJIEBA_SIMD_AVX2`、`CPPJIEBA_SIMD_NEON` 之一并加上对应编译选项；
   宏与目标架构或编译选项不符时，`neo/simd/SimdLevel.hpp` 在编译期报错。
-- 目前还没有内核按级别切换实现，各项进度见 [ROADMAP](../ROADMAP.md#分词吞吐simd)。
+- 目前只有分隔符扫描按级别切换实现：`SSE2` 和 `AVX2` 各有向量版本，`NEON` 暂用标量；其余各项见
+  [ROADMAP](../ROADMAP.md#分词吞吐simd)。2026-11 在 i5-12500 上，`SSE2` 让各模式快约 3%–4%；
+  `AVX2` 的内核收益相近，但 `-mavx2` 本身让其余代码慢约 1.5%–2%，整体暂不如 `SSE2`。
 
 ## 构建选项
 

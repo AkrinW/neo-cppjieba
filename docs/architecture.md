@@ -20,7 +20,7 @@
 | 值类型与配置 | `value/`、`options/`、`Config.hpp`、`Fwd.hpp` | 公开的输入、结果与选项，不含算法 |
 | 契约 | `concept/Text.hpp`、`Output.hpp`、`Segment.hpp`、`Match.hpp`、`Keyword.hpp` | 输入与加载、输出与访问者、policy 族与分词回调、词典匹配、标注回调的 concept；依赖它约束的类型 |
 | 基础设施 | `util/Logging.hpp`、`Unicode.hpp`、`RuneString.hpp`、`StringUtil.hpp`、`FileIO.hpp`、`Platform.hpp` | 诊断、编解码、码点串哈希、解析、文件读取；被各层共用 |
-| 向量化内核 | `simd/SimdLevel.hpp` | `CPPJIEBA_SIMD` 选定的指令集级别；内核按级别选择实现，平台宏与 intrinsic 只出现在 `simd/` |
+| 向量化内核 | `simd/SimdLevel.hpp`、`RuneMatch.hpp` | `CPPJIEBA_SIMD` 选定的指令集级别；分隔符扫描等内核按级别选择实现，平台宏与 intrinsic 只出现在 `simd/` |
 
 `Dag.hpp` 仅供 `Trie::find_dag` 的诊断和对照测试使用，分词路径不物化 DAG。
 
