@@ -95,9 +95,11 @@ Google Benchmark's `tools/compare.py` can compare two such reports locally; it n
 order, plus the OFF build a second time, so each SIMD/OFF ratio pairs a run with the OFF run of the same round and
 the second OFF run (A/A) shows the machine's own noise. It stops when a build reports another level, cuts any mode
 differently from OFF, or reports a benchmark error. It writes a Markdown table, with the median and range of each
-benchmark's per-round change in bold when every round lies outside the A/A range, and a JSON summary that keeps the
-per-round medians. Build every level with the same compiler and flags, ideally with `-falign-functions=64` so code
-placement adds no noise, and pin the script to one CPU where the platform allows:
+benchmark's per-round change in bold when every round lies outside the A/A range, and a JSON summary that keeps every
+run's repetition times. `--statistic min` instead compares each build's fastest repetition over all rounds, for
+machines whose whole runs slow down at random: interference only adds time, so the fastest repetitions repeat best.
+Build every level with the same compiler and flags, ideally with `-falign-functions=64` so code placement adds no
+noise, and pin the script to one CPU where the platform allows:
 
 ```sh
 taskset -c 2 python3 benchmark/simd_ab_benchmark.py \
@@ -110,11 +112,11 @@ taskset -c 2 python3 benchmark/simd_ab_benchmark.py \
 `python3 -B -m unittest discover -s benchmark -p 'simd_ab_benchmark_test.py'` runs its unit tests.
 
 The `SIMD benchmarks` workflow (`.github/workflows/simd-benchmark.yml`) runs this comparison on every pull request:
-Linux x64 and Windows x64 compare OFF, SSE2 and AVX2; Linux ARM64 and Windows ARM64 compare OFF and NEON. macOS is
-left out because its virtualized runners varied by up to 60% between two OFF runs.
+Linux x64 and Windows x64 compare OFF, SSE2 and AVX2; Linux ARM64, Windows ARM64 and macOS compare OFF and NEON.
 Each platform builds and times all of its levels in one job on `weicheng.utf8`, five rounds of three repetitions,
-writes its table to the job summary, and a final job collects the tables into one pull-request comment. A build
-whose output differs from OFF fails its job; timing changes are only reported.
+writes its table to the job summary, and a final job collects the tables into one pull-request comment. macOS runs
+on virtual M1 runners, where two OFF runs differed by up to 60% by their medians, so it runs fifteen shorter rounds
+with `--statistic min`. A build whose output differs from OFF fails its job; timing changes are only reported.
 
 `load_benchmark` first checks that snapshot and text loading cut and tag the corpus identically, then times
 each loading stage. `--rounds N` sets the rounds per case (default 9); each round is one load, reported as a

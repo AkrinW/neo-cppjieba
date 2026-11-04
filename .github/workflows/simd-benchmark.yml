@@ -23,13 +23,35 @@ jobs:
     strategy:
       fail-fast: false
       # Every level of one platform is built and timed in the same job, so its ratios never compare different runners.
-      # macOS is left out: on its virtualized runners even OFF against OFF varied by up to 60%.
+      # The macOS runners are virtual M1 machines whose whole runs slow down at random (OFF against OFF varied by up
+      # to 60% with medians), so macOS runs more, shorter rounds and compares the fastest repetitions.
       matrix:
         include:
-          - {platform: linux-x64, title: "Linux x64 / GCC 16", os: ubuntu-26.04, levels: "OFF SSE2 AVX2"}
-          - {platform: linux-arm64, title: "Linux ARM64 / GCC 16", os: ubuntu-26.04-arm, levels: "OFF NEON"}
-          - {platform: windows-x64, title: "Windows x64 / MSVC", os: windows-2025-vs2026, levels: "OFF SSE2 AVX2"}
-          - {platform: windows-arm64, title: "Windows ARM64 / MSVC", os: windows-11-vs2026-arm, levels: "OFF NEON"}
+          - platform: linux-x64
+            title: Linux x64 / GCC 16
+            os: ubuntu-26.04
+            levels: OFF SSE2 AVX2
+            measure: --rounds 5 --repetitions 3 --min-time 0.1s --statistic median
+          - platform: linux-arm64
+            title: Linux ARM64 / GCC 16
+            os: ubuntu-26.04-arm
+            levels: OFF NEON
+            measure: --rounds 5 --repetitions 3 --min-time 0.1s --statistic median
+          - platform: windows-x64
+            title: Windows x64 / MSVC
+            os: windows-2025-vs2026
+            levels: OFF SSE2 AVX2
+            measure: --rounds 5 --repetitions 3 --min-time 0.1s --statistic median
+          - platform: windows-arm64
+            title: Windows ARM64 / MSVC
+            os: windows-11-vs2026-arm
+            levels: OFF NEON
+            measure: --rounds 5 --repetitions 3 --min-time 0.1s --statistic median
+          - platform: macos-arm64
+            title: macOS ARM64 / Clang 23
+            os: macos-26
+            levels: OFF NEON
+            measure: --rounds 15 --repetitions 3 --min-time 0.05s --statistic min
     steps:
       - uses: actions/checkout@v7
 
@@ -44,6 +66,10 @@ jobs:
       - name: Install C++23 compiler on Linux
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y g++-16
+
+      - name: Install LLVM and libc++ on macOS
+        if: runner.os == 'macOS'
+        run: brew install llvm@23
 
       - name: Driver unit tests
         if: matrix.platform == 'linux-x64'
@@ -61,6 +87,12 @@ jobs:
               Linux)
                 cmake "${common[@]}" -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=g++-16 \
                   -DCMAKE_CXX_FLAGS=-falign-functions=64 ;;
+              macOS)
+                llvm_prefix="$(brew --prefix llvm@23)"
+                cmake "${common[@]}" -G Ninja -DCMAKE_BUILD_TYPE=Release \
+                  -DCMAKE_C_COMPILER="$llvm_prefix/bin/clang" -DCMAKE_CXX_COMPILER="$llvm_prefix/bin/clang++" \
+                  -DCMAKE_CXX_FLAGS="-stdlib=libc++ -falign-functions=64" \
+                  -DCMAKE_EXE_LINKER_FLAGS="-L$llvm_prefix/lib/c++ -L$llvm_prefix/lib/unwind -lunwind -Wl,-rpath,$llvm_prefix/lib/c++ -Wl,-rpath,$llvm_prefix/lib/unwind" ;;
               Windows)
                 cmake "${common[@]}" -G "Visual Studio 18 2026" -A "$WINDOWS_ARCH" ;;
             esac
@@ -71,9 +103,11 @@ jobs:
         env:
           LEVELS: ${{ matrix.levels }}
           TITLE: ${{ matrix.title }}
+          MEASURE: ${{ matrix.measure }}
         run: |
           case "$RUNNER_OS" in
             Linux) cpu_model="$(lscpu | sed -n 's/^Model name: *//p' | head -n 1)" ;;
+            macOS) cpu_model="$(sysctl -n machdep.cpu.brand_string)" ;;
             Windows)
               cpu_model="$(powershell -NoProfile -Command '(Get-CimInstance Win32_Processor).Name' | tr -d '\r')" ;;
           esac
@@ -91,9 +125,11 @@ jobs:
             pin=(taskset -c "$(python -c 'import os; print(min(os.sched_getaffinity(0)))')")
           fi
           mkdir -p reports
+          # MEASURE holds only option words, so it splits on spaces.
+          read -r -a measure <<< "$MEASURE"
           "${pin[@]}" python -B benchmark/simd_ab_benchmark.py "${variants[@]}" \
             --dict dict/jieba.dict.utf8 --model dict/hmm_model.utf8 --text test/testdata/weicheng.utf8 \
-            --rounds 5 --repetitions 3 --min-time 0.1s --title "$TITLE · $cpu_model" \
+            "${measure[@]}" --title "$TITLE · $cpu_model" \
             --markdown reports/simd-ab.md --json reports/simd-ab.json
 
       - name: Write job summary
@@ -152,7 +188,7 @@ jobs:
             echo "Head ${HEAD_SHA::7} ([run]($RUN_URL)). Each platform builds every level in one job and compares"
             echo "it with the OFF build on the same runner; absolute times are not comparable across platforms or runs."
             echo
-            for platform in linux-x64 linux-arm64 windows-x64 windows-arm64; do
+            for platform in linux-x64 linux-arm64 windows-x64 windows-arm64 macos-arm64; do
               report="reports/simd-ab-$platform/simd-ab.md"
               if [ -f "$report" ]; then
                 cat "$report"
