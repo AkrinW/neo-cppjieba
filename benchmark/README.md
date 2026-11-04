@@ -68,6 +68,14 @@ The first eleven targets are built by the benchmark option. The Rust target also
 requires `CPPJIEBA_BUILD_RUST_BENCHMARKS=ON` and Cargo. Its adapter links through
 `jieba_rs::jieba_rs`; see [RUST.md](RUST.md) for the output contracts and commands.
 
+Every C++ target in the table except `load_test` and `cut_compare_benchmark` runs on
+[Google Benchmark](../deps/README.md#google-benchmark), through the shared `GoogleBenchmarkUtils.hpp`. Each one
+checks its inputs, and that the implementations it compares agree, before timing; then it reports one row per case,
+named `<case>/<implementation>` such as `DAG/old` and `DAG/neo`. Compare those rows for speedups. Google Benchmark's
+flags may appear anywhere on the command line, for example `--benchmark_filter=Miss`, `--benchmark_repetitions=5` or
+`--benchmark_out=report.json --benchmark_out_format=json`; the positional arguments keep their earlier meanings.
+Iterations that process a whole corpus report `items_per_second` (lines) and `runes` per second.
+
 `simd_compare_benchmark` times the same Neo translation unit as `cut_compare_benchmark` in MIX, MP, FULL, SEARCH
 and HMM, for string, borrowed and reused outputs (`MIX/strings` … `HMM/reused`), without the old CppJieba or Rust
 engines. Each iteration is one corpus pass timed by the engine itself. The report context records the build's
@@ -84,9 +92,10 @@ build-bench/benchmark/simd_compare_benchmark --benchmark_repetitions=5 \
 Google Benchmark's `tools/compare.py` can compare two such reports locally; it needs NumPy and SciPy.
 
 `load_benchmark` first checks that snapshot and text loading cut and tag the corpus identically, then times
-each loading stage. `--rounds N` sets the rounds per case (default 9); `--cold` evicts the input files from
-the page cache before every round, which Linux allows without root. Model loading writes info logs to
-stderr, so redirect it to read the table alone:
+each loading stage. `--rounds N` sets the rounds per case (default 9); each round is one load, reported as a
+Google Benchmark repetition, and each case shows the mean, median, spread, minimum and maximum. `--cold` evicts
+the input files from the page cache before every round, which Linux allows without root. Model loading writes
+info logs to stderr, so redirect it to read the table alone:
 
 ```sh
 build-bench/benchmark/load_benchmark --cold 2>/dev/null

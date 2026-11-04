@@ -19,6 +19,7 @@
 #include "neo/resource/HMModel.hpp"
 
 #include "BenchmarkUtils.hpp"
+#include "GoogleBenchmarkUtils.hpp"
 #include "test_paths.h"
 
 #include <algorithm>
@@ -27,15 +28,18 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
-#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <ios>
 #include <span>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <utility>
 #include <vector>
+
+#include <benchmark/benchmark.h>
 
 #ifdef __linux__
 #include <fcntl.h>
@@ -49,17 +53,32 @@ namespace {
 // Whether each round first evicts its input files from the page cache.
 enum class PageCache { Warm, Cold };
 
-/// Elapsed milliseconds of one case across its rounds.
-struct Timing {
-    double min_ms;
-    double median_ms;
-    double max_ms;
-};
-
 /// Command-line settings.
 struct Settings {
     PageCache cache;
     int rounds;
+};
+
+// Removes the snapshot directory on every exit path, including a failed comparison.
+class TemporaryDirectory {
+public:
+    explicit TemporaryDirectory(std::filesystem::path path) : path_{std::move(path)} {
+        std::filesystem::create_directories(path_);
+    }
+    TemporaryDirectory(const TemporaryDirectory &) = delete;
+    auto operator=(const TemporaryDirectory &) -> TemporaryDirectory & = delete;
+    ~TemporaryDirectory() {
+        auto error = std::error_code{};
+        std::filesystem::remove_all(path_, error);
+    }
+
+    [[nodiscard]]
+    auto path() const -> const std::filesystem::path & {
+        return path_;
+    }
+
+private:
+    std::filesystem::path path_;
 };
 
 // Drop the clean cached pages of a file so the next read comes from storage; only Linux allows this without root.
@@ -78,31 +97,44 @@ auto evict_from_page_cache(const std::filesystem::path &path) -> bool {
 #endif
 }
 
+// Smallest and largest round, reported beside Google Benchmark's mean, median and spread.
+auto minimum(const std::vector<double> &rounds) -> double {
+    return *std::ranges::min_element(rounds);
+}
+
+auto maximum(const std::vector<double> &rounds) -> double {
+    return *std::ranges::max_element(rounds);
+}
+
 // Time one case; its result is destroyed after the clock stops, so teardown stays out of the timing.
+// Each round is one repetition of a single load, so every round evicts its inputs first in cold mode.
 template <typename Load>
-auto time_case(const Settings &settings, std::span<const std::filesystem::path> inputs, Load load) -> Timing {
-    auto samples = std::vector<double>{};
-    samples.reserve(static_cast<std::size_t>(settings.rounds));
-    for (auto round = 0; round < settings.rounds; ++round) {
-        if (settings.cache == PageCache::Cold) {
-            std::ranges::for_each(inputs, evict_from_page_cache);
-        }
-        const auto start = Clock::now();
-        const auto result = load();
-        DoNotOptimize(result);
-        samples.push_back(Ms{Clock::now() - start}.count());
-    }
-    std::ranges::sort(samples);
-    return {samples.front(), samples[samples.size() / 2], samples.back()};
+auto register_case(const char *name, const Settings &settings, std::vector<std::filesystem::path> inputs, Load load)
+    -> void {
+    benchmark::RegisterBenchmark(name,
+                                 [cache = settings.cache, inputs = std::move(inputs), load](benchmark::State &state) {
+                                     for (auto _ : state) {
+                                         if (cache == PageCache::Cold) {
+                                             std::ranges::for_each(inputs, evict_from_page_cache);
+                                         }
+                                         const auto start = Clock::now();
+                                         auto result = load();
+                                         state.SetIterationTime(elapsed_seconds(start));
+                                         benchmark::DoNotOptimize(result);
+                                     }
+                                 })
+        ->UseManualTime()
+        ->Iterations(1)
+        ->Repetitions(settings.rounds)
+        ->ReportAggregatesOnly(true)
+        ->ComputeStatistics("min", minimum)
+        ->ComputeStatistics("max", maximum)
+        ->Unit(benchmark::kMillisecond);
 }
 
-auto print_timing(std::string_view name, const Timing &timing) -> void {
-    std::printf("  %-30.*s %10.2f %10.2f %10.2f\n", static_cast<int>(name.size()), name.data(), timing.min_ms,
-                timing.median_ms, timing.max_ms);
-}
-
-// Parse [--cold] [--rounds N]; returns false after printing usage for anything else.
-auto parse_settings(std::span<char *const> args, Settings &settings) -> bool {
+// Parse [--cold] [--rounds N]; throws usage for anything else.
+auto parse_settings(BenchmarkArgs args) -> Settings {
+    auto settings = Settings{PageCache::Warm, 9};
     for (auto i = std::size_t{1}; i < args.size(); ++i) {
         const auto arg = std::string_view{args[i]};
         if (arg == "--cold") {
@@ -116,10 +148,9 @@ auto parse_settings(std::span<char *const> args, Settings &settings) -> bool {
                 continue;
             }
         }
-        std::fprintf(stderr, "usage: %s [--cold] [--rounds N]\n", args[0]);
-        return false;
+        throw std::invalid_argument("usage: load_benchmark [--benchmark_<flag>...] [--cold] [--rounds N]");
     }
-    return true;
+    return settings;
 }
 
 auto write_file(const std::filesystem::path &path, std::span<const std::byte> bytes) -> void {
@@ -139,13 +170,9 @@ auto megabytes(std::uintmax_t bytes) -> double {
     return static_cast<double>(bytes) / (1024.0 * 1024.0);
 }
 
-} // namespace
-
-auto main(int argc, char *argv[]) -> int {
-    auto settings = Settings{PageCache::Warm, 9};
-    if (!parse_settings(std::span{argv, static_cast<std::size_t>(argc)}, settings)) {
-        return EXIT_FAILURE;
-    }
+// Encode a snapshot, check it against text loading, then time every startup stage.
+auto run(BenchmarkArgs args) -> void {
+    const auto settings = parse_settings(args);
     const auto dict_path = std::filesystem::path{DICT_DIR "/jieba.dict.utf8"};
     const auto user_path = std::filesystem::path{DICT_DIR "/user.dict.utf8"};
     const auto model_path = std::filesystem::path{DICT_DIR "/hmm_model.utf8"};
@@ -157,56 +184,49 @@ auto main(int argc, char *argv[]) -> int {
     const auto encode_start = Clock::now();
     const auto bytes = Jieba::encode_dict_snapshot(dict, user_dicts);
     const auto encode_ms = Ms{Clock::now() - encode_start}.count();
-    auto error = std::error_code{};
-    const auto directory = std::filesystem::temp_directory_path() / "neo-load-benchmark";
-    std::filesystem::create_directories(directory, error);
-    const auto snapshot_path = directory / "jieba.snapshot";
+    const auto directory = TemporaryDirectory{std::filesystem::temp_directory_path() / "neo-load-benchmark"};
+    const auto snapshot_path = directory.path() / "jieba.snapshot";
     write_file(snapshot_path, bytes);
     const auto snapshot = SnapshotSource::file(snapshot_path.string());
 
     const auto snapshot_jieba = Jieba::from_snapshot(snapshot, model);
     const auto text_jieba = Jieba{dict, model, user_dicts};
-    const auto lines = load_lines(TEST_DATA_DIR "/weicheng.utf8");
+    const auto lines = require_lines(TEST_DATA_DIR "/weicheng.utf8");
     if (!same_cuts(snapshot_jieba, text_jieba, lines)) {
-        std::fprintf(stderr, "snapshot and text loading cut the corpus differently\n");
-        std::filesystem::remove_all(directory, error);
-        return EXIT_FAILURE;
+        throw std::runtime_error("snapshot and text loading cut the corpus differently");
     }
 
     const auto cold = settings.cache == PageCache::Cold;
     if (cold && !evict_from_page_cache(dict_path)) {
         std::printf("Page cache eviction is unavailable here; the cold run measures a warm cache.\n");
     }
-    std::printf("Main dictionary %.2f MiB, user dictionary %ju B; snapshot %.2f MiB, encoded in %.2f ms\n",
-                megabytes(std::filesystem::file_size(dict_path)), std::filesystem::file_size(user_path),
-                megabytes(bytes.size()), encode_ms);
-    std::printf("Page cache: %s, rounds: %d, corpus cuts match over %zu lines\n\n", cold ? "cold" : "warm",
-                settings.rounds, lines.size());
-    std::printf("  %-30s %10s %10s %10s\n", "case (ms)", "min", "median", "max");
+    benchmark::AddCustomContext("main_dictionary_mib",
+                                std::to_string(megabytes(std::filesystem::file_size(dict_path))));
+    benchmark::AddCustomContext("user_dictionary_bytes", std::to_string(std::filesystem::file_size(user_path)));
+    benchmark::AddCustomContext("snapshot_mib", std::to_string(megabytes(bytes.size())));
+    benchmark::AddCustomContext("snapshot_encode_ms", std::to_string(encode_ms));
+    benchmark::AddCustomContext("page_cache", cold ? "cold" : "warm");
+    benchmark::AddCustomContext("corpus_lines_matched", std::to_string(lines.size()));
 
-    const auto text_inputs = std::array{dict_path, user_path};
-    const auto snapshot_inputs = std::array{snapshot_path};
-    const auto model_inputs = std::array{model_path};
-    const auto text_jieba_inputs = std::array{dict_path, user_path, model_path};
-    const auto snapshot_jieba_inputs = std::array{snapshot_path, model_path};
     const auto memory = SnapshotSource::memory(bytes, "jieba.snapshot");
+    register_case("Load/text_dict_trie", settings, {dict_path, user_path},
+                  [&] { return detail::DictTrie{dict, user_dicts, opt}; });
+    register_case("Load/snapshot_decode_memory", settings, {},
+                  [&] { return detail::decode_dict_snapshot(bytes, "jieba.snapshot"); });
+    register_case("Load/snapshot_dict_trie_memory", settings, {}, [&] { return detail::load_dict_snapshot(memory); });
+    register_case("Load/snapshot_dict_trie_file", settings, {snapshot_path},
+                  [&] { return detail::load_dict_snapshot(snapshot); });
+    register_case("Load/hmm_model", settings, {model_path}, [&] { return detail::HMModel{model}; });
+    register_case("Load/jieba_text", settings, {dict_path, user_path, model_path},
+                  [&] { return Jieba{dict, model, user_dicts}; });
+    register_case("Load/jieba_snapshot_file", settings, {snapshot_path, model_path},
+                  [&] { return Jieba::from_snapshot(snapshot, model); });
+    // Jieba construction speedup (median): Load/jieba_text_median over Load/jieba_snapshot_file_median.
+    benchmark::RunSpecifiedBenchmarks();
+}
 
-    print_timing("text DictTrie",
-                 time_case(settings, text_inputs, [&] { return detail::DictTrie{dict, user_dicts, opt}; }));
-    print_timing("snapshot decode (memory)",
-                 time_case(settings, {}, [&] { return detail::decode_dict_snapshot(bytes, "jieba.snapshot"); }));
-    print_timing("snapshot DictTrie (memory)",
-                 time_case(settings, {}, [&] { return detail::load_dict_snapshot(memory); }));
-    print_timing("snapshot DictTrie (file)",
-                 time_case(settings, snapshot_inputs, [&] { return detail::load_dict_snapshot(snapshot); }));
-    print_timing("HMModel", time_case(settings, model_inputs, [&] { return detail::HMModel{model}; }));
-    const auto text_total = time_case(settings, text_jieba_inputs, [&] { return Jieba{dict, model, user_dicts}; });
-    const auto snapshot_total =
-        time_case(settings, snapshot_jieba_inputs, [&] { return Jieba::from_snapshot(snapshot, model); });
-    print_timing("Jieba from text", text_total);
-    print_timing("Jieba from snapshot (file)", snapshot_total);
-    std::printf("\nJieba construction speedup (median): %.2fx\n", text_total.median_ms / snapshot_total.median_ms);
+} // namespace
 
-    std::filesystem::remove_all(directory, error);
-    return EXIT_SUCCESS;
+auto main(int argc, char *argv[]) -> int {
+    return benchmark_main(argc, argv, run);
 }
