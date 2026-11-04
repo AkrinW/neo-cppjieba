@@ -63,7 +63,7 @@ jobs:
           restore-keys: fuzz-corpus-
       - name: Fuzz with one process per core
         env:
-          FUZZ_FORK: "4"
+          FUZZ_JOBS: "4"
           FUZZ_MINIMIZE: "1"
         run: tools/fuzz.sh build "$FUZZ_SECONDS" "${{ matrix.target }}"
       # A crash stops before minimizing, so the target's corpus is kept only after a clean run.
