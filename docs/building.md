@@ -94,7 +94,7 @@ target_link_libraries(my_app PRIVATE neo_cppjieba::icu)
 - 不经 CMake 集成时，自行定义 `CPPJIEBA_SIMD_SSE2`、`CPPJIEBA_SIMD_AVX2`、`CPPJIEBA_SIMD_NEON` 之一并加上对应编译选项；
   宏与目标架构或编译选项不符时，`neo/simd/SimdLevel.hpp` 在编译期报错。
 - 按级别切换实现的内核有分隔符扫描和 HMM Viterbi（CPP 与 Python/Rust 两种规则各一个）：`SSE2` 和 `AVX2`
-  各有向量版本，`NEON` 暂用标量；其余各项见 [ROADMAP](../ROADMAP.md#分词吞吐simd)。2026-11 在 i5-12500 上，
+  各有向量版本，`NEON` 目前只有分隔符扫描的向量版本；其余各项见 [ROADMAP](../ROADMAP.md#分词吞吐simd)。2026-11 在 i5-12500 上，
   分隔符扫描让各模式快约 3%–4%，但 `-mavx2` 本身让其余代码慢约 1.5%–2%；CPP 规则的 Viterbi 内核另让 MIX 和
   SEARCH 在 `AVX2` 下快约 3%–4%、`SSE2` 下快约 1%–2%，HMM 模式快约 15%–24%；Python/Rust 规则的内核让 HMM 模式
   快约 24%–28%，MIX 快约 1%–2%。合计起来，MIX 上两级相当，SEARCH 和 HMM 模式 `AVX2` 更快。

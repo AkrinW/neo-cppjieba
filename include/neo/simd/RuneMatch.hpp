@@ -4,6 +4,7 @@
 #include "neo/simd/SimdLevel.hpp" // IWYU pragma: keep (validates CPPJIEBA_SIMD_<LEVEL> before the #if below)
 #include "neo/util/Logging.hpp"
 
+#include <algorithm>
 #include <array>
 #include <bit>
 #include <concepts>
@@ -16,6 +17,8 @@
 #include <immintrin.h>
 #elif defined(CPPJIEBA_SIMD_SSE2)
 #include <emmintrin.h>
+#elif defined(CPPJIEBA_SIMD_NEON)
+#include <arm_neon.h>
 #endif
 
 namespace neo_cppjieba::detail::simd {
@@ -23,7 +26,7 @@ namespace neo_cppjieba::detail::simd {
 namespace scalar {
 
 /// Append the index of every rune that satisfies is_match, in ascending order. Every backend must reproduce this
-/// result; it also serves OFF and NEON builds unchanged. runes.size() must fit RuneIndex.
+/// result; it also serves OFF builds unchanged. runes.size() must fit RuneIndex.
 template <typename IsMatch>
     requires std::predicate<const IsMatch &, char32_t>
 inline auto append_matches(std::span<const char32_t> runes, const IsMatch &is_match, std::vector<RuneIndex> &out)
@@ -108,14 +111,61 @@ inline auto block_match_mask(std::span<const char32_t, match_block_size> block,
 } // namespace avx2
 #endif
 
+#if defined(CPPJIEBA_SIMD_NEON)
+namespace neon {
+
+/// Byte weights that fold 8 consecutive 0xFF/0x00 compare bytes into one mask byte under pairwise addition.
+inline constexpr auto group_bits =
+    std::array<std::uint8_t, 16>{1, 2, 4, 8, 16, 32, 64, 128, 1, 2, 4, 8, 16, 32, 64, 128};
+
+/// Return 0xFFFF in each 16-bit lane whose rune among runes[0, 8) equals one of needles. Saturating narrowing maps
+/// every rune above U+FFFF to 0xFFFF, which matches no needle because append_matches requires needles below it.
+template <std::size_t N>
+[[nodiscard]]
+inline auto match_8_runes(const char32_t *runes, const std::array<char32_t, N> &needles) noexcept -> uint16x8_t {
+    const auto low = vld1q_u32(reinterpret_cast<const std::uint32_t *>(runes));
+    const auto high = vld1q_u32(reinterpret_cast<const std::uint32_t *>(runes + 4));
+    const auto narrow = vqmovn_high_u32(vqmovn_u32(low), high);
+    auto hits = vdupq_n_u16(0);
+    for (const auto needle : needles) {
+        hits = vorrq_u16(hits, vceqq_u16(narrow, vdupq_n_u16(static_cast<std::uint16_t>(needle))));
+    }
+    return hits;
+}
+
+/// Return a mask whose bit k is set when block[k] equals one of needles, comparing 8 runes narrowed to 16 bits per
+/// step. NEON has no movemask: one byte per rune is weighted, and three pairwise additions gather 8 runes per byte.
+template <std::size_t N>
+[[nodiscard]]
+inline auto block_match_mask(std::span<const char32_t, match_block_size> block,
+                             const std::array<char32_t, N> &needles) noexcept -> std::uint32_t {
+    const auto *runes = block.data();
+    const auto first = vmovn_high_u16(vmovn_u16(match_8_runes(runes, needles)), match_8_runes(runes + 8, needles));
+    const auto second =
+        vmovn_high_u16(vmovn_u16(match_8_runes(runes + 16, needles)), match_8_runes(runes + 24, needles));
+    const auto weights = vld1q_u8(group_bits.data());
+    auto sums = vpaddq_u8(vandq_u8(first, weights), vandq_u8(second, weights));
+    sums = vpaddq_u8(sums, sums);
+    sums = vpaddq_u8(sums, sums);
+    // Bytes 0-3 now hold runes 0-7, 8-15, 16-23 and 24-31, so the little-endian lane is the block mask.
+    return vgetq_lane_u32(vreinterpretq_u32_u8(sums), 0);
+}
+
+} // namespace neon
+#endif
+
 /// Append the index of every rune equal to one of needles, in ascending order, with the highest backend the build
 /// enables. is_match must accept exactly the needles: it classifies block tails and every rune of scalar builds.
+/// Every needle must be below U+FFFF, the value the NEON kernel saturates wider runes to.
 template <std::size_t N, typename IsMatch>
     requires std::predicate<const IsMatch &, char32_t>
-inline auto append_matches(std::span<const char32_t> runes, [[maybe_unused]] const std::array<char32_t, N> &needles,
+inline auto append_matches(std::span<const char32_t> runes, const std::array<char32_t, N> &needles,
                            const IsMatch &is_match, std::vector<RuneIndex> &out) -> void {
     assert_check([&] { return size_fits_capacity<RuneIndex>(runes.size()); },
                  "simd::append_matches: {} runes exceed the RuneIndex range", runes.size());
+    assert_check(
+        [&] { return std::ranges::all_of(needles, [](char32_t needle) { return needle < char32_t{0xFFFF}; }); },
+        "simd::append_matches: every needle must be below U+FFFF");
 #if defined(CPPJIEBA_SIMD_AVX2)
     const auto block_mask = [&](std::span<const char32_t, match_block_size> block) {
         return avx2::block_match_mask(block, needles);
@@ -126,8 +176,13 @@ inline auto append_matches(std::span<const char32_t> runes, [[maybe_unused]] con
         return sse2::block_match_mask(block, needles);
     };
     append_block_matches(runes, block_mask, is_match, out);
+#elif defined(CPPJIEBA_SIMD_NEON)
+    const auto block_mask = [&](std::span<const char32_t, match_block_size> block) {
+        return neon::block_match_mask(block, needles);
+    };
+    append_block_matches(runes, block_mask, is_match, out);
 #else
-    static_assert(level == SimdLevel::OFF || level == SimdLevel::NEON,
+    static_assert(level == SimdLevel::OFF,
                   "simd::append_matches: a level with a vector kernel fell through to the scalar scan");
     scalar::append_matches(runes, is_match, out);
 #endif

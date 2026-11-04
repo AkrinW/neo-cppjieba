@@ -25,9 +25,11 @@ using namespace neo_cppjieba::detail::simd;
 
 namespace {
 
-// Runes next to the separators in value or in the low bitmask, plus values a signed lane compare would misread.
-constexpr auto near_separator_runes = std::array<char32_t, 16>{
-    8, 11, 31, 33, 0x49, 0x4A, 0x60, 0x2002, 0x3001, 0x3003, 0xFF0B, 0xFF0D, 0x1FF0C, 0x13002, 0x80000020, 0xFFFFFFFF};
+// Runes next to the separators in value or in the low bitmask, plus values a signed lane compare would misread and
+// the edge of the 16-bit saturation the NEON kernel narrows runes with.
+constexpr auto near_separator_runes =
+    std::array<char32_t, 18>{8,      11,     31,     33,     0x49,    0x4A,    0x60,    0x2002,     0x3001,
+                             0x3003, 0xFF0B, 0xFF0D, 0xFFFF, 0x10000, 0x1FF0C, 0x13002, 0x80000020, 0xFFFFFFFF};
 
 // Matches of the default separators from the backend this build selects.
 auto active_matches(std::span<const char32_t> runes) -> std::vector<RuneIndex> {
