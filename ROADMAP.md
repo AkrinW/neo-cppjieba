@@ -106,8 +106,7 @@
 - [x] CI 以 SSE2、AVX2、NEON 运行全部测试，`simd_kernels` fuzz 目标逐位比较各内核与标量参考。
 - [x] 每个 PR 在 Linux、Windows（x64 与 ARM64）和 macOS 上于同一 job 内对比 OFF 与各 SIMD 级别，
   检查输出一致并把耗时变化与 OFF 对 OFF 的噪声汇总到 PR 评论，见 [benchmark 指南](benchmark/README.md)。
-- [ ] 分隔符扫描和 Viterbi 的 NEON 内核；分隔符扫描已有 NEON 版本，收益待 arm64 平台的 A/B 结果确认，
-  Viterbi 仍使用标量实现。
+- [ ] 分隔符扫描和 Viterbi 的 NEON 内核：均已实现，收益待 arm64 平台的 A/B 结果确认。
 - [ ] UTF-8 解码快速路径：2026-11 试做的 SSE4.2 / AVX2 版本只让 MIX 快约 0.5%，短文本还有回退，已搁置；
   解码占比变大后再考虑。
 

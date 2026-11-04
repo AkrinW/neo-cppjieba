@@ -11,7 +11,7 @@
 #include <type_traits>
 #include <utility>
 
-#if defined(CPPJIEBA_SIMD_AVX2) || defined(CPPJIEBA_SIMD_SSE2)
+#if defined(CPPJIEBA_SIMD_AVX2) || defined(CPPJIEBA_SIMD_SSE2) || defined(CPPJIEBA_SIMD_NEON)
 #include "neo/util/ForceInline.hpp"
 
 #include <bit>
@@ -22,13 +22,15 @@
 #include <immintrin.h>
 #elif defined(CPPJIEBA_SIMD_SSE2)
 #include <emmintrin.h>
+#elif defined(CPPJIEBA_SIMD_NEON)
+#include <arm_neon.h>
 #endif
 
 // Forward-pass kernels for the Viterbi in algorithm/HMMSegment.hpp. Each column scores the states B, E, M, S. Under
 // the CppJieba rule a state keeps the first predecessor whose (weight + transition) + emission strictly exceeds the
 // floor and every earlier candidate; under the Python/Rust rule it weighs only its two legal predecessors and keeps
 // the later one on a tie. Vector backends add in the same order and break ties the same way, so they match the scalar
-// loops bit for bit; NEON builds use the scalar loops for now.
+// loops bit for bit.
 
 namespace neo_cppjieba::detail::simd {
 
@@ -115,12 +117,14 @@ inline auto viterbi_forward_legal(StateScores weights, std::span<const StateScor
 
 } // namespace scalar
 
-#if defined(CPPJIEBA_SIMD_AVX2) || defined(CPPJIEBA_SIMD_SSE2)
-
-// Move bit y of a four-bit lane mask to the low bit of byte y; the four shifted copies of the mask never overlap.
-[[nodiscard, NEO_FORCE_INLINE]]
-constexpr auto spread_lanes(std::uint32_t mask) noexcept -> std::uint32_t {
-    return (mask * std::uint32_t{0x00204081}) & std::uint32_t{0x01010101};
+#if defined(CPPJIEBA_SIMD_AVX2) || defined(CPPJIEBA_SIMD_SSE2) || defined(CPPJIEBA_SIMD_NEON)
+// Lane y holds the transition into state y from its earlier (slot 0) or later (slot 1) legal predecessor.
+inline auto legal_transitions(std::span<const StateScores, 4> transitions, std::size_t slot) noexcept -> StateScores {
+    auto rows = StateScores{};
+    for (auto y = std::size_t{0}; y < rows.size(); ++y) {
+        rows[y] = transitions[legal_predecessors[y][slot]][y];
+    }
+    return rows;
 }
 
 // The earlier (slot 0) or later (slot 1) legal predecessor of every state, one byte per state.
@@ -131,6 +135,15 @@ constexpr auto legal_predecessor_bytes(std::size_t slot) noexcept -> std::uint32
     }
     return bytes;
 }
+#endif
+
+#if defined(CPPJIEBA_SIMD_AVX2) || defined(CPPJIEBA_SIMD_SSE2)
+
+// Move bit y of a four-bit lane mask to the low bit of byte y; the four shifted copies of the mask never overlap.
+[[nodiscard, NEO_FORCE_INLINE]]
+constexpr auto spread_lanes(std::uint32_t mask) noexcept -> std::uint32_t {
+    return (mask * std::uint32_t{0x00204081}) & std::uint32_t{0x01010101};
+}
 
 // Byte y receives the earlier legal predecessor of state y where earlier_wins has bit y, else the later one.
 [[nodiscard, NEO_FORCE_INLINE]]
@@ -139,15 +152,6 @@ constexpr auto pack_legal(std::uint32_t earlier_wins) noexcept -> std::uint32_t 
     // Every legal pair is two states apart, so one subtraction per byte picks the earlier state.
     static_assert(later_bytes - legal_predecessor_bytes(0) == 0x02020202U);
     return later_bytes - 2 * spread_lanes(earlier_wins);
-}
-
-// Lane y holds the transition into state y from its earlier (slot 0) or later (slot 1) legal predecessor.
-inline auto legal_transitions(std::span<const StateScores, 4> transitions, std::size_t slot) noexcept -> StateScores {
-    auto rows = StateScores{};
-    for (auto y = std::size_t{0}; y < rows.size(); ++y) {
-        rows[y] = transitions[legal_predecessors[y][slot]][y];
-    }
-    return rows;
 }
 
 // AVX2 builds compile this backend too, so tests and measurements can compare both widths in one build.
@@ -400,6 +404,149 @@ inline auto viterbi_forward_legal(StateScores weights, std::span<const StateScor
 } // namespace avx2
 #endif
 
+#if defined(CPPJIEBA_SIMD_NEON)
+namespace neon {
+
+/// One value per predecessor state for two target states, as in sse2::HalfRows.
+struct HalfRows {
+    float64x2_t from_b;
+    float64x2_t from_e;
+    float64x2_t from_m;
+    float64x2_t from_s;
+};
+
+/// The floored best score of two states and the index of its first predecessor, or the floor state.
+struct HalfColumn {
+    float64x2_t best;
+    uint64x2_t prev;
+};
+
+// Score two states from the four predecessor weights, each broadcast to both lanes. Each round keeps its later
+// candidate only when strictly greater, so a tie keeps the earlier predecessor as the scalar loop does. vmaxq_f64 is
+// avoided: it returns +0.0 when signed zeros tie. The round masks also yield the winner's index.
+[[nodiscard, NEO_FORCE_INLINE]]
+inline auto score_half(const HalfRows &weights, const HalfRows &rows, float64x2_t emit, float64x2_t floor_score,
+                       uint64x2_t floor_state) noexcept -> HalfColumn {
+    const auto c0 = vaddq_f64(vaddq_f64(weights.from_b, rows.from_b), emit);
+    const auto c1 = vaddq_f64(vaddq_f64(weights.from_e, rows.from_e), emit);
+    const auto c2 = vaddq_f64(vaddq_f64(weights.from_m, rows.from_m), emit);
+    const auto c3 = vaddq_f64(vaddq_f64(weights.from_s, rows.from_s), emit);
+    const auto e_wins = vcgtq_f64(c1, c0);
+    const auto s_wins = vcgtq_f64(c3, c2);
+    const auto early = vbslq_f64(e_wins, c1, c0);
+    const auto late = vbslq_f64(s_wins, c3, c2);
+    const auto late_wins = vcgtq_f64(late, early);
+    const auto best = vbslq_f64(late_wins, late, early);
+    // A set mask lane is all ones: shifting it right by 63 gives E (1) over B (0), and 2 minus it gives S (3) over M.
+    const auto early_prev = vshrq_n_u64(e_wins, 63);
+    const auto late_prev = vsubq_u64(vdupq_n_u64(2), s_wins);
+    const auto above_floor = vcgtq_f64(best, floor_score);
+    return {.best = vbslq_f64(above_floor, best, floor_score),
+            .prev = vbslq_u64(above_floor, vbslq_u64(late_wins, late_prev, early_prev), floor_state)};
+}
+
+// The low byte of each 64-bit lane of two halves, in state order, as bytes 0–3.
+[[nodiscard, NEO_FORCE_INLINE]]
+inline auto low_bytes(uint64x2_t low, uint64x2_t high) noexcept -> uint8x8_t {
+    const auto words = vuzp1q_u32(vreinterpretq_u32_u64(low), vreinterpretq_u32_u64(high));
+    const auto shorts = vmovn_u32(words);
+    return vmovn_u16(vcombine_u16(shorts, shorts));
+}
+
+// Bytes 0–3 as one little-endian word, the layout of a path row.
+[[nodiscard, NEO_FORCE_INLINE]]
+inline auto first_word(uint8x8_t bytes) noexcept -> std::uint32_t {
+    return vget_lane_u32(vreinterpret_u32_u8(bytes), 0);
+}
+
+// The four state scores held in two halves.
+[[nodiscard, NEO_FORCE_INLINE]]
+inline auto to_scores(float64x2_t low, float64x2_t high) noexcept -> StateScores {
+    auto scores = StateScores{};
+    vst1q_f64(scores.data(), low);
+    vst1q_f64(scores.data() + 2, high);
+    return scores;
+}
+
+/// Same contract as scalar::viterbi_forward. Each column is two halves, (B, E) and (M, S), of two doubles each.
+template <typename State, typename EmitAt>
+    requires ViterbiInputs<State, EmitAt>
+inline auto viterbi_forward(StateScores weights, std::span<const StateScores, 4> transitions, ViterbiFloor<State> floor,
+                            const EmitAt &emit_at, std::span<std::array<State, 4>> path) -> StateScores {
+    const auto rows_low = HalfRows{.from_b = vld1q_f64(transitions[0].data()),
+                                   .from_e = vld1q_f64(transitions[1].data()),
+                                   .from_m = vld1q_f64(transitions[2].data()),
+                                   .from_s = vld1q_f64(transitions[3].data())};
+    const auto rows_high = HalfRows{.from_b = vld1q_f64(transitions[0].data() + 2),
+                                    .from_e = vld1q_f64(transitions[1].data() + 2),
+                                    .from_m = vld1q_f64(transitions[2].data() + 2),
+                                    .from_s = vld1q_f64(transitions[3].data() + 2)};
+    const auto floor_score = vdupq_n_f64(floor.score);
+    const auto floor_state = vdupq_n_u64(static_cast<std::uint64_t>(std::to_underlying(floor.state)));
+    auto low = vld1q_f64(weights.data());
+    auto high = vld1q_f64(weights.data() + 2);
+    for (auto x = std::size_t{1}; x < path.size(); ++x) {
+        const auto emit_probs = emit_at(x);
+        const auto broadcasts = HalfRows{.from_b = vdupq_laneq_f64(low, 0),
+                                         .from_e = vdupq_laneq_f64(low, 1),
+                                         .from_m = vdupq_laneq_f64(high, 0),
+                                         .from_s = vdupq_laneq_f64(high, 1)};
+        const auto first = score_half(broadcasts, rows_low, vld1q_f64(emit_probs.data()), floor_score, floor_state);
+        const auto second =
+            score_half(broadcasts, rows_high, vld1q_f64(emit_probs.data() + 2), floor_score, floor_state);
+        path[x] = std::bit_cast<std::array<State, 4>>(first_word(low_bytes(first.prev, second.prev)));
+        low = first.best;
+        high = second.best;
+        assert_check([&] { return finite_scores(to_scores(low, high)); }, "HMMSegment: non-finite accumulated weight");
+    }
+    return to_scores(low, high);
+}
+
+// Exchange the two lanes.
+[[nodiscard, NEO_FORCE_INLINE]]
+inline auto swap_lanes(float64x2_t pair) noexcept -> float64x2_t {
+    return vextq_f64(pair, pair, 1);
+}
+
+/// Same contract as scalar::viterbi_forward_legal, with the lane layout of sse2::viterbi_forward_legal: states (B, E)
+/// weigh predecessors (E, B) against (S, M), and states (M, S) weigh (B, E) against (M, S).
+template <typename State, typename EmitAt>
+    requires ViterbiInputs<State, EmitAt>
+inline auto viterbi_forward_legal(StateScores weights, std::span<const StateScores, 4> transitions,
+                                  const EmitAt &emit_at, std::span<std::array<State, 4>> path) -> StateScores {
+    const auto earlier_rows = legal_transitions(transitions, 0);
+    const auto later_rows = legal_transitions(transitions, 1);
+    const auto earlier_low = vld1q_f64(earlier_rows.data());
+    const auto earlier_high = vld1q_f64(earlier_rows.data() + 2);
+    const auto later_low = vld1q_f64(later_rows.data());
+    const auto later_high = vld1q_f64(later_rows.data() + 2);
+    const auto earlier_states = vreinterpret_u8_u32(vdup_n_u32(legal_predecessor_bytes(0)));
+    const auto later_states = vreinterpret_u8_u32(vdup_n_u32(legal_predecessor_bytes(1)));
+    auto low = vld1q_f64(weights.data());
+    auto high = vld1q_f64(weights.data() + 2);
+    for (auto x = std::size_t{1}; x < path.size(); ++x) {
+        const auto emit_probs = emit_at(x);
+        const auto emit_low = vld1q_f64(emit_probs.data());
+        const auto emit_high = vld1q_f64(emit_probs.data() + 2);
+        const auto low_earlier = vaddq_f64(vaddq_f64(swap_lanes(low), earlier_low), emit_low);
+        const auto low_later = vaddq_f64(vaddq_f64(swap_lanes(high), later_low), emit_low);
+        const auto high_earlier = vaddq_f64(vaddq_f64(low, earlier_high), emit_high);
+        const auto high_later = vaddq_f64(vaddq_f64(high, later_high), emit_high);
+        // Only a strictly greater earlier score wins, so a tie keeps the later predecessor as the scalar loop does.
+        const auto low_wins = vcgtq_f64(low_earlier, low_later);
+        const auto high_wins = vcgtq_f64(high_earlier, high_later);
+        low = vbslq_f64(low_wins, low_earlier, low_later);
+        high = vbslq_f64(high_wins, high_earlier, high_later);
+        const auto states = vbsl_u8(low_bytes(low_wins, high_wins), earlier_states, later_states);
+        path[x] = std::bit_cast<std::array<State, 4>>(first_word(states));
+        assert_check([&] { return finite_scores(to_scores(low, high)); }, "HMMSegment: non-finite accumulated weight");
+    }
+    return to_scores(low, high);
+}
+
+} // namespace neon
+#endif
+
 /// Run the forward pass with the highest backend the build enables; same contract as scalar::viterbi_forward.
 template <typename State, typename EmitAt>
     requires ViterbiInputs<State, EmitAt>
@@ -409,8 +556,10 @@ inline auto viterbi_forward(StateScores weights, std::span<const StateScores, 4>
     return avx2::viterbi_forward(weights, transitions, floor, emit_at, path);
 #elif defined(CPPJIEBA_SIMD_SSE2)
     return sse2::viterbi_forward(weights, transitions, floor, emit_at, path);
+#elif defined(CPPJIEBA_SIMD_NEON)
+    return neon::viterbi_forward(weights, transitions, floor, emit_at, path);
 #else
-    static_assert(level == SimdLevel::OFF || level == SimdLevel::NEON,
+    static_assert(level == SimdLevel::OFF,
                   "simd::viterbi_forward: a level with a vector kernel fell through to the scalar loop");
     return scalar::viterbi_forward(weights, transitions, floor, emit_at, path);
 #endif
@@ -426,8 +575,10 @@ inline auto viterbi_forward_legal(StateScores weights, std::span<const StateScor
     return avx2::viterbi_forward_legal(weights, transitions, emit_at, path);
 #elif defined(CPPJIEBA_SIMD_SSE2)
     return sse2::viterbi_forward_legal(weights, transitions, emit_at, path);
+#elif defined(CPPJIEBA_SIMD_NEON)
+    return neon::viterbi_forward_legal(weights, transitions, emit_at, path);
 #else
-    static_assert(level == SimdLevel::OFF || level == SimdLevel::NEON,
+    static_assert(level == SimdLevel::OFF,
                   "simd::viterbi_forward_legal: a level with a vector kernel fell through to the scalar loop");
     return scalar::viterbi_forward_legal(weights, transitions, emit_at, path);
 #endif
