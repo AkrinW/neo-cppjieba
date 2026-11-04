@@ -60,12 +60,28 @@ subdirectory for multi-configuration generators).
 | `unicode_benchmark` | Unicode decoding and encoding | none |
 | `prefilter_benchmark` | Input prefiltering | none |
 | `query_segment_benchmark` | Query segmentation strategies | none |
+| `simd_compare_benchmark` | Neo segmentation of one `CPPJIEBA_SIMD` build | none |
 | `cut_compare_benchmark` | Old, neo and Rust segmentation | old cppjieba, jieba-rs |
 | `python_compare_benchmark.py` | The same native paths plus Python `list[str]` | `cut_compare_benchmark`, Python jieba |
 
-The first ten targets are built by the benchmark option. The Rust target also
+The first eleven targets are built by the benchmark option. The Rust target also
 requires `CPPJIEBA_BUILD_RUST_BENCHMARKS=ON` and Cargo. Its adapter links through
 `jieba_rs::jieba_rs`; see [RUST.md](RUST.md) for the output contracts and commands.
+
+`simd_compare_benchmark` times the same Neo translation unit as `cut_compare_benchmark` in MIX, MP, FULL, SEARCH
+and HMM, for string, borrowed and reused outputs (`MIX/strings` … `HMM/reused`), without the old CppJieba or Rust
+engines. Each iteration is one corpus pass timed by the engine itself. The report context records the build's
+`CPPJIEBA_SIMD` level and each mode's token count and FNV-1a token-range digest, so builds at different levels can
+be checked for identical output and timed against each other on the same machine. Google Benchmark flags may appear
+anywhere; the positional arguments are `[dict [model [text]]]`:
+
+```sh
+build-bench/benchmark/simd_compare_benchmark --benchmark_repetitions=5 \
+  --benchmark_enable_random_interleaving=true --benchmark_out=simd-off.json --benchmark_out_format=json \
+  dict/jieba.dict.utf8 dict/hmm_model.utf8 test/testdata/weicheng.utf8
+```
+
+Google Benchmark's `tools/compare.py` can compare two such reports locally; it needs NumPy and SciPy.
 
 `load_benchmark` first checks that snapshot and text loading cut and tag the corpus identically, then times
 each loading stage. `--rounds N` sets the rounds per case (default 9); `--cold` evicts the input files from
