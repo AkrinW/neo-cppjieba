@@ -76,6 +76,13 @@ public:
         return trans_prob[static_cast<size_t>(from)][static_cast<size_t>(to)];
     }
 
+    /// All transition scores indexed [from][to], for Viterbi kernels that load whole rows.
+    [[nodiscard]]
+    constexpr auto get_trans_probs() const noexcept
+        -> const std::array<std::array<double, kHMMStatesNum>, kHMMStatesNum> & {
+        return trans_prob;
+    }
+
     // ── Query interface ──────────────────────────────────────────────────
 
     /// Look up one state's emission probability of `key`; absent entries return MIN_DOUBLE.

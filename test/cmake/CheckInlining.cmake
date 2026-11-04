@@ -3,6 +3,8 @@
 set(hot_helpers
     "decode_utf8_fast<"
     "HMModel::get_emit_probs\\("
+    "detail::simd::sse2::(select|score_half|pack_states)\\("
+    "detail::simd::avx2::pack_states\\("
     "is_default_separator_unlikely\\("
 )
 
