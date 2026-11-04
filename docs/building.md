@@ -143,8 +143,10 @@ LLVM 23 来自 apt.llvm.org，软件源由 `tools/add-llvm-apt-source.sh` 添加
 - `test/fuzz/corpus/<目标>/` 保存按边覆盖精简的语料，`tools/fuzz.sh` 只读取它，新输入写入 `<构建目录>/fuzz-run/corpus/`。
   运行 `<构建目录>/fuzz/<目标>_fuzzer -set_cover_merge=1 -use_counters=0 test/fuzz/corpus/<目标> <构建目录>/fuzz-run/corpus/<目标>`
   把带来新覆盖的输入并入语料；修复崩溃后把复现输入放入对应目录，作为回归测试。
-- `tools/fuzz.sh` 按输入格式为每个目标选用 `test/fuzz/dict/` 中的 libFuzzer 字典。`FUZZ_FORK=<n>` 为每个目标运行 n 个
-  fuzz 进程，`FUZZ_MINIMIZE=1` 在每个目标结束后把工作语料合并为带来覆盖的输入。
+- `tools/fuzz.sh` 按输入格式为每个目标选用 `test/fuzz/dict/` 中的 libFuzzer 字典。`FUZZ_JOBS=<n>` 用 libFuzzer 的
+  `-jobs` 为每个目标并行运行 n 个 fuzz 进程，各进程共享工作语料，日志写入 `<构建目录>/fuzz-run/logs/<目标>/`。
+  `-fork` 在 apt.llvm.org 的构建中合并子任务结果时会崩溃（[llvm#201274](https://github.com/llvm/llvm-project/issues/201274)），
+  脚本不使用它。`FUZZ_MINIMIZE=1` 或 `FUZZ_JOBS` 大于 1 时，每个目标结束后把工作语料合并为带来覆盖的输入。
 - Quality 工作流对每个目标 fuzz 30 秒，从缓存的语料出发；PR 只读取缓存，master 的推送精简后保存。
   [Nightly fuzz 工作流](../.github/workflows/fuzz-nightly.yml)每天为每个目标开一个任务，以 4 个进程 fuzz 10 分钟，
   再把各目标精简后的语料合并存入同一缓存；手动触发时可指定每个目标的秒数。

@@ -13,7 +13,8 @@ usage() {
     echo "usage: $0 <build-dir> [seconds-per-fuzzer] [fuzzer...]" >&2
     echo "       $0 --list" >&2
     echo "fuzzers: ${FUZZERS[*]}" >&2
-    echo "FUZZ_FORK=<n> runs n fuzzing processes per target; FUZZ_MINIMIZE=1 merges each working corpus afterwards." >&2
+    echo "FUZZ_JOBS=<n> runs n fuzzing processes per target; FUZZ_MINIMIZE=1, or FUZZ_JOBS above 1," >&2
+    echo "merges each working corpus afterwards." >&2
 }
 
 # The libFuzzer dictionary for each target's input format, under test/fuzz/dict.
@@ -99,17 +100,24 @@ run_fuzzer() {
     local corpus=$2
     local checked_in=$3
     local artifacts=$4
-    local seconds=$5
-    local dictionary=$6
+    local logs=$5
+    local seconds=$6
+    local dictionary=$7
+    local jobs=$8
 
     local -a parallel=()
-    if [[ ${FUZZ_FORK:-1} -gt 1 ]]; then
-        parallel=(-fork="${FUZZ_FORK}")
+    if [[ ${jobs} -gt 1 ]]; then
+        # -fork crashes in apt.llvm.org builds while merging job results (llvm/llvm-project#201274).
+        # -workers defaults to half the cores, so it is set as well.
+        parallel=(-jobs="${jobs}" -workers="${jobs}")
     fi
     echo "--- ${binary##*/}: ${seconds}s ---"
-    "${binary}" "${corpus}" "${checked_in}" "${parallel[@]}" -dict="${dictionary}" \
+    # Each parallel process writes fuzz-<n>.log to the current directory.
+    rm -rf "${logs}"
+    mkdir -p "${logs}"
+    (cd -- "${logs}" && "${binary}" "${corpus}" "${checked_in}" "${parallel[@]}" -dict="${dictionary}" \
         -max_total_time="${seconds}" -timeout=10 -rss_limit_mb=2048 \
-        -close_fd_mask=3 -print_final_stats=1 -artifact_prefix="${artifacts}/"
+        -close_fd_mask=3 -print_final_stats=1 -artifact_prefix="${artifacts}/")
 }
 
 # Keep the inputs of a working corpus that add coverage, so a cached corpus stays small between runs.
@@ -135,8 +143,11 @@ main() {
         return 0
     fi
 
-    local build_dir=$1
+    # Paths are absolute because the fuzzer runs from its log directory.
+    local build_dir
+    build_dir=$(cd -- "$1" && pwd)
     local seconds=${2:-${FUZZ_SECONDS_DEFAULT}}
+    local jobs=${FUZZ_JOBS:-1}
     local -a fuzzers=("${@:3}")
     if [[ ${#fuzzers[@]} -eq 0 ]]; then
         fuzzers=("${FUZZERS[@]}")
@@ -150,8 +161,9 @@ main() {
     for name in "${fuzzers[@]}"; do
         binary="${build_dir}/fuzz/${name}_fuzzer"
         run_fuzzer "${binary}" "${work}/corpus/${name}" "${REPO_ROOT}/test/fuzz/corpus/${name}" "${work}/artifacts" \
-            "${seconds}" "${REPO_ROOT}/test/fuzz/dict/$(dictionary_for "${name}").dict"
-        if [[ ${FUZZ_MINIMIZE:-} == 1 ]]; then
+            "${work}/logs/${name}" "${seconds}" "${REPO_ROOT}/test/fuzz/dict/$(dictionary_for "${name}").dict" "${jobs}"
+        # Parallel processes fill the shared working corpus quickly, so a parallel run always merges it.
+        if [[ ${FUZZ_MINIMIZE:-} == 1 || ${jobs} -gt 1 ]]; then
             minimize_corpus "${binary}" "${work}/corpus/${name}"
         fi
     done
