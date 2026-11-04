@@ -103,7 +103,8 @@ auto parse_new_method(const std::string &path) -> size_t {
 // Time one parsing method per iteration, rejecting a dictionary smaller than the full jieba one.
 template <typename ParseFn>
 auto time_parse(benchmark::State &state, const ParseFn &parse, const std::string &path) -> void {
-    for (auto _ : state) {
+    for ([[maybe_unused]]
+         auto _ : state) {
         auto line_count = parse(path);
         if (line_count <= kFullDictionaryLines) {
             state.SkipWithError("benchmark requires the full jieba dictionary: " + path);

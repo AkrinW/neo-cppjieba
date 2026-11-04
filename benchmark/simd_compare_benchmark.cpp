@@ -97,7 +97,8 @@ auto ranges_digest(NeoEngine &neo, CompareMode mode, const std::vector<std::stri
 // cut_compare_benchmark. A pass whose token count differs from the correctness pass ends the benchmark with an error.
 auto time_corpus_passes(benchmark::State &state, NeoEngine &neo, CompareMode mode, NeoOutput output,
                         const std::vector<std::string> &lines, std::size_t tokens, std::size_t bytes) -> void {
-    for (auto _ : state) {
+    for ([[maybe_unused]]
+         auto _ : state) {
         const auto measurement = neo.bench(lines, mode, output, 1);
         state.SetIterationTime(measurement.milliseconds / 1000.0);
         if (measurement.tokens != tokens) {

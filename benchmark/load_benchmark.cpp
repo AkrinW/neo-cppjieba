@@ -113,7 +113,8 @@ auto register_case(const char *name, const Settings &settings, std::vector<std::
     -> void {
     benchmark::RegisterBenchmark(name,
                                  [cache = settings.cache, inputs = std::move(inputs), load](benchmark::State &state) {
-                                     for (auto _ : state) {
+                                     for ([[maybe_unused]]
+                                          auto _ : state) {
                                          if (cache == PageCache::Cold) {
                                              std::ranges::for_each(inputs, evict_from_page_cache);
                                          }

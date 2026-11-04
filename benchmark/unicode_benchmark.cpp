@@ -91,14 +91,16 @@ auto chunk_count(std::size_t runes) -> std::size_t {
 // ─── 1. Decode benchmark ────────────────────────────────────────────
 auto register_decode(const std::string &text) -> void {
     benchmark::RegisterBenchmark("Decode/normal", [&text](benchmark::State &state) {
-        for (auto _ : state) {
+        for ([[maybe_unused]]
+             auto _ : state) {
             auto u = decode(text);
             benchmark::DoNotOptimize(u);
         }
         set_bytes_rate(state, text.size());
     });
     benchmark::RegisterBenchmark("Decode/sourced", [&text](benchmark::State &state) {
-        for (auto _ : state) {
+        for ([[maybe_unused]]
+             auto _ : state) {
             auto ws = decode_with_offset(text);
             benchmark::DoNotOptimize(ws);
         }
@@ -110,14 +112,16 @@ auto register_decode(const std::string &text) -> void {
 auto register_full_encode(const std::string &text, const Unicode &normal_decoded,
                           const UnicodeWithOffset &sourced_decoded) -> void {
     benchmark::RegisterBenchmark("FullEncode/normal", [&text, &normal_decoded](benchmark::State &state) {
-        for (auto _ : state) {
+        for ([[maybe_unused]]
+             auto _ : state) {
             auto s = encode(std::span<const Rune>(normal_decoded));
             benchmark::DoNotOptimize(s);
         }
         set_bytes_rate(state, text.size());
     });
     benchmark::RegisterBenchmark("FullEncode/fast", [&text, &sourced_decoded](benchmark::State &state) {
-        for (auto _ : state) {
+        for ([[maybe_unused]]
+             auto _ : state) {
             auto view = as_view(text);
             const auto &offsets = sourced_decoded.get_offsets();
             auto range = WordRange{0, static_cast<uint32_t>(sourced_decoded.get_runes().size())};
@@ -133,7 +137,8 @@ auto register_subrange_encode(const std::string &text, const Unicode &normal_dec
                               const UnicodeWithOffset &sourced_decoded) -> void {
     benchmark::RegisterBenchmark("SubrangeEncode/normal", [&text, &normal_decoded](benchmark::State &state) {
         const auto num_chunks = chunk_count(normal_decoded.size());
-        for (auto _ : state) {
+        for ([[maybe_unused]]
+             auto _ : state) {
             for (size_t c = 0; c < num_chunks; ++c) {
                 auto offset = c * kChunkSize;
                 auto count = std::min(kChunkSize, normal_decoded.size() - offset);
@@ -145,7 +150,8 @@ auto register_subrange_encode(const std::string &text, const Unicode &normal_dec
     });
     benchmark::RegisterBenchmark("SubrangeEncode/fast", [&text, &sourced_decoded](benchmark::State &state) {
         const auto num_chunks = chunk_count(sourced_decoded.runes.size());
-        for (auto _ : state) {
+        for ([[maybe_unused]]
+             auto _ : state) {
             for (size_t c = 0; c < num_chunks; ++c) {
                 auto offset = c * kChunkSize;
                 auto count = std::min(kChunkSize, sourced_decoded.runes.size() - offset);
@@ -169,7 +175,8 @@ auto register_segmentation(const std::string &text, const std::vector<WordRange>
         auto runes = Unicode{};
         auto words = std::vector<std::string>{};
         words.reserve(ranges.size());
-        for (auto _ : state) {
+        for ([[maybe_unused]]
+             auto _ : state) {
             // decode() is this call on a fresh buffer; no public entry point decodes into an existing Unicode.
             decode_into_impl<OffsetMode::Omit>(as_code_units(text), runes);
             words.clear();
@@ -185,7 +192,8 @@ auto register_segmentation(const std::string &text, const std::vector<WordRange>
         auto ws = UnicodeWithOffset{};
         auto words = std::vector<std::string>{};
         words.reserve(ranges.size());
-        for (auto _ : state) {
+        for ([[maybe_unused]]
+             auto _ : state) {
             decode_with_offset_into(text, ws);
             words.clear();
             auto view = as_view(text);

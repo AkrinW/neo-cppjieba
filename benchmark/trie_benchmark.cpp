@@ -138,7 +138,8 @@ public:
         // ── Build ────────────────────────────────────────────────────────────
         benchmark::RegisterBenchmark("Build/old",
                                      [this](benchmark::State &state) {
-                                         for (auto _ : state) {
+                                         for ([[maybe_unused]]
+                                              auto _ : state) {
                                              const auto start = Clock::now();
                                              auto trie = std::make_unique<old::Trie>(keys_, ptrs_);
                                              state.SetIterationTime(elapsed_seconds(start));
@@ -205,7 +206,8 @@ public:
         // ── Build ────────────────────────────────────────────────────────────
         benchmark::RegisterBenchmark("Build/neo",
                                      [this](benchmark::State &state) {
-                                         for (auto _ : state) {
+                                         for ([[maybe_unused]]
+                                              auto _ : state) {
                                              auto trie = neo::detail::Trie{};
                                              const auto start = Clock::now();
                                              trie.build(keys_, values_);

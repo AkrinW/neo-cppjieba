@@ -48,7 +48,8 @@ public:
 
     auto run(benchmark::State &state) const -> void {
         // Timed run
-        for (auto _ : state) {
+        for ([[maybe_unused]]
+             auto _ : state) {
             auto dags = std::vector<cppjieba::Dag>{};
             for (const auto &rune_array : rune_arrays_) {
                 dict_trie_.Find(rune_array.begin(), rune_array.end(), dags);
@@ -85,7 +86,8 @@ public:
     auto run(benchmark::State &state) const -> void {
         const auto &trie = dict_trie_.trie();
         // Timed run
-        for (auto _ : state) {
+        for ([[maybe_unused]]
+             auto _ : state) {
             for (const auto &runes : rune_vecs_) {
                 auto dag = trie.find_dag(runes);
                 benchmark::DoNotOptimize(dag);

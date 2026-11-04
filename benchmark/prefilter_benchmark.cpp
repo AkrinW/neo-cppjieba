@@ -436,7 +436,8 @@ auto verify_strategies(const std::vector<LineData> &lines) -> void {
 template <typename Pass>
 auto time_passes(benchmark::State &state, const Pass &pass, size_t lines, size_t total_runes) -> void {
     auto checksum = uint64_t{0};
-    for (auto _ : state) {
+    for ([[maybe_unused]]
+         auto _ : state) {
         pass(checksum);
     }
     benchmark::DoNotOptimize(checksum);

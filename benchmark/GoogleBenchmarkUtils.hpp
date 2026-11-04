@@ -96,7 +96,8 @@ inline auto shuffled_indices(std::size_t count, std::uint32_t seed) -> std::vect
 template <typename CutFn, typename Line>
 auto time_corpus_cut(benchmark::State &state, const CutFn &cut, const std::vector<Line> &lines, std::size_t runes)
     -> void {
-    for (auto _ : state) {
+    for ([[maybe_unused]]
+         auto _ : state) {
         for (const auto &line : lines) {
             auto result = cut(line);
             benchmark::DoNotOptimize(result);
@@ -108,7 +109,8 @@ auto time_corpus_cut(benchmark::State &state, const CutFn &cut, const std::vecto
 // Look up every key once per iteration in stored order; items_per_second counts lookups.
 template <typename FindFn, typename Key>
 auto time_lookups(benchmark::State &state, const FindFn &find, const std::vector<Key> &keys) -> void {
-    for (auto _ : state) {
+    for ([[maybe_unused]]
+         auto _ : state) {
         for (const auto &key : keys) {
             auto result = find(key);
             benchmark::DoNotOptimize(result);
@@ -121,7 +123,8 @@ auto time_lookups(benchmark::State &state, const FindFn &find, const std::vector
 template <typename FindFn, typename Key>
 auto time_lookups_in_order(benchmark::State &state, const FindFn &find, const std::vector<Key> &keys,
                            const std::vector<std::size_t> &order) -> void {
-    for (auto _ : state) {
+    for ([[maybe_unused]]
+         auto _ : state) {
         for (const auto index : order) {
             auto result = find(keys[index]);
             benchmark::DoNotOptimize(result);
