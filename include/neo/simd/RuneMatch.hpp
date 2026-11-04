@@ -127,6 +127,8 @@ inline auto append_matches(std::span<const char32_t> runes, [[maybe_unused]] con
     };
     append_block_matches(runes, block_mask, is_match, out);
 #else
+    static_assert(level == SimdLevel::OFF || level == SimdLevel::NEON,
+                  "simd::append_matches: a level with a vector kernel fell through to the scalar scan");
     scalar::append_matches(runes, is_match, out);
 #endif
 }

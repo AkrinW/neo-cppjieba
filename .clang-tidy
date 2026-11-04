@@ -51,4 +51,4 @@ CheckOptions:
     value: none
   # Third-party include layouts are not ours to fix; patterns match anywhere in a header's real path.
   - key: misc-include-cleaner.IgnoreHeaders
-    value: 'deps/(cppjieba|limonp)/.*;include/neo/third_party/.*'
+    value: 'deps/(cppjieba|limonp)/.*;include/neo/third_party/.*;include/benchmark/.*'

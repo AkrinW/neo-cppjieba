@@ -24,50 +24,33 @@
 #include "neo/Utf.hpp"
 
 #include "BenchmarkUtils.hpp"
+#include "GoogleBenchmarkUtils.hpp"
 #include "test_paths.h"
 
 #include <algorithm>
 #include <array>
-#include <chrono>
 #include <cstddef>
 #include <cstdio>
-#include <cstring>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include <benchmark/benchmark.h>
+
 namespace {
 
-struct BenchResult {
-    const char *label;
-    double total_ms;
-    size_t num_lines;
-    size_t total_runes;
-    size_t rounds;
+using CM = neo_cppjieba::CutMode;
+
+// One of the five segmentation methods, with the name both the Old and Neo benchmarks use for it.
+struct Method {
+    const char *name;
+    CM mode;
 };
 
-static auto print_report(const BenchResult &r) -> void {
-    auto total_ops = static_cast<double>(r.num_lines * r.rounds);
-    auto total_runes = static_cast<double>(r.total_runes * r.rounds);
-    auto ns_per_line = r.total_ms * 1e6 / total_ops;
-    auto ns_per_rune = r.total_ms * 1e6 / total_runes;
-    auto lines_per_sec = total_ops / (r.total_ms / 1000.0);
-    auto runes_per_sec = total_runes / (r.total_ms / 1000.0);
-
-    std::printf("┌──────────────────────────────────────────────────────┐\n");
-    std::printf("│ %-52s │\n", r.label);
-    std::printf("├──────────────────────────┬───────────────────────────┤\n");
-    std::printf("│ Lines                    │ %25zu │\n", r.num_lines);
-    std::printf("│ Total runes              │ %25zu │\n", r.total_runes);
-    std::printf("│ Rounds                   │ %25zu │\n", r.rounds);
-    std::printf("├──────────────────────────┼───────────────────────────┤\n");
-    std::printf("│ Total time               │ %22.2f ms │\n", r.total_ms);
-    std::printf("│ Per line                 │ %22.1f ns │\n", ns_per_line);
-    std::printf("│ Per rune                 │ %22.1f ns │\n", ns_per_rune);
-    std::printf("│ Line throughput          │ %19.2f Kl/s │\n", lines_per_sec / 1e3);
-    std::printf("│ Rune throughput          │ %19.2f Mr/s │\n", runes_per_sec / 1e6);
-    std::printf("└──────────────────────────┴───────────────────────────┘\n\n");
-}
+constexpr auto kMethods = std::array{
+    Method{"MIX", CM::MIX},   Method{"MP", CM::MP},         Method{"HMM", CM::HMM},
+    Method{"FULL", CM::FULL}, Method{"SEARCH", CM::SEARCH},
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Correctness verification — compare old vs neo for one method
@@ -135,34 +118,49 @@ static auto neo_tagged_words(const neo_cppjieba::Jieba &jieba, const std::string
     return words;
 }
 
+// Old Jieba's call for one method, chosen at compile time so each timed loop contains only that call.
+template <CM Mode>
+auto old_cut(const cppjieba::Jieba &jieba, const std::string &s) -> std::vector<std::string> {
+    auto w = std::vector<std::string>{};
+    if constexpr (Mode == CM::MIX) {
+        jieba.Cut(s, w);
+    } else if constexpr (Mode == CM::MP) {
+        jieba.CutSmall(s, w, 99);
+    } else if constexpr (Mode == CM::HMM) {
+        jieba.CutHMM(s, w);
+    } else if constexpr (Mode == CM::FULL) {
+        jieba.CutAll(s, w);
+    } else {
+        static_assert(Mode == CM::SEARCH);
+        jieba.CutForSearch(s, w);
+    }
+    return w;
+}
+
+// Compare Old and Neo string output for one method; returns whether every line matches.
+template <CM Mode>
+auto verify_mode(const char *name, const cppjieba::Jieba &old_jieba, const neo_cppjieba::Jieba &jieba,
+                 const std::vector<std::string> &lines) -> bool {
+    return verify_method(
+        name, [&](const std::string &s) { return old_cut<Mode>(old_jieba, s); },
+        [&](const std::string &s) { return jieba.cut_strings(s, Mode); }, lines);
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Generic benchmark runner (Unicode-level, pre-decoded)
 //
 // CutFn: (const Unicode &) -> std::vector<WordRange>
 // ─────────────────────────────────────────────────────────────────────────────
-template <typename CutFn>
-static auto bench_cut_unicode(const char *label, const CutFn &fn,
-                              const std::vector<neo_cppjieba::detail::Unicode> &all_unicodes, size_t total_runes,
-                              size_t rounds) -> BenchResult {
-    auto n = all_unicodes.size();
-
-    // Warm up
-    for (auto i = size_t{0}; i < n; ++i) {
-        auto result = fn(all_unicodes[i]);
-        DoNotOptimize(result);
+auto register_core(const neo_cppjieba::Jieba &jieba, const std::vector<neo_cppjieba::detail::Unicode> &all_unicodes,
+                   size_t total_runes) -> void {
+    for (const auto &method : kMethods) {
+        benchmark::RegisterBenchmark(std::string{"Core/"} + method.name, [&jieba, &all_unicodes, total_runes,
+                                                                          mode = method.mode](benchmark::State &state) {
+            time_corpus_cut(
+                state, [&jieba, mode](const neo_cppjieba::detail::Unicode &u) { return jieba.cut_runes(u, mode); },
+                all_unicodes, total_runes);
+        })->Unit(benchmark::kMillisecond);
     }
-
-    // Timed run
-    auto t0 = Clock::now();
-    for (auto round = size_t{0}; round < rounds; ++round) {
-        for (auto i = size_t{0}; i < n; ++i) {
-            auto result = fn(all_unicodes[i]);
-            DoNotOptimize(result);
-        }
-    }
-    auto t1 = Clock::now();
-
-    return {label, Ms(t1 - t0).count(), n, total_runes, rounds};
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -170,149 +168,86 @@ static auto bench_cut_unicode(const char *label, const CutFn &fn,
 //
 // CutFn: (const std::string &) -> std::vector<std::string>
 // ─────────────────────────────────────────────────────────────────────────────
-template <typename CutFn>
-static auto bench_cut_string(const char *label, const CutFn &fn, const std::vector<std::string> &lines,
-                             size_t total_runes, size_t rounds) -> BenchResult {
-    auto n = lines.size();
-
-    // Warm up
-    for (auto i = size_t{0}; i < n; ++i) {
-        auto result = fn(lines[i]);
-        DoNotOptimize(result);
-    }
-
-    // Timed run
-    auto t0 = Clock::now();
-    for (auto round = size_t{0}; round < rounds; ++round) {
-        for (auto i = size_t{0}; i < n; ++i) {
-            auto result = fn(lines[i]);
-            DoNotOptimize(result);
-        }
-    }
-    auto t1 = Clock::now();
-
-    return {label, Ms(t1 - t0).count(), n, total_runes, rounds};
+template <typename OldCutFn, typename NeoCutFn>
+auto register_string_pair(const char *name, const OldCutFn &old_fn, const NeoCutFn &neo_fn,
+                          const std::vector<std::string> &lines, size_t total_runes) -> void {
+    benchmark::RegisterBenchmark(std::string{"String/"} + name + "/old", [old_fn, &lines,
+                                                                          total_runes](benchmark::State &state) {
+        time_corpus_cut(state, old_fn, lines, total_runes);
+    })->Unit(benchmark::kMillisecond);
+    benchmark::RegisterBenchmark(std::string{"String/"} + name + "/neo", [neo_fn, &lines,
+                                                                          total_runes](benchmark::State &state) {
+        time_corpus_cut(state, neo_fn, lines, total_runes);
+    })->Unit(benchmark::kMillisecond);
 }
 
-} // namespace
+// Register the string-level Old and Neo benchmarks of one of the five methods.
+template <CM Mode>
+auto register_string_method(const char *name, const cppjieba::Jieba &old_jieba, const neo_cppjieba::Jieba &jieba,
+                            const std::vector<std::string> &lines, size_t total_runes) -> void {
+    register_string_pair(
+        name, [&old_jieba](const std::string &s) { return old_cut<Mode>(old_jieba, s); },
+        [&jieba](const std::string &s) { return jieba.cut_strings(s, Mode); }, lines, total_runes);
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Main
 // ─────────────────────────────────────────────────────────────────────────────
-auto main(int argc, char *argv[]) -> int {
-    auto dict_path = std::string(DICT_DIR) + "/jieba.dict.utf8";
-    auto model_path = std::string(DICT_DIR) + "/hmm_model.utf8";
-    auto user_dict_path = std::string(DICT_DIR) + "/user.dict.utf8";
-    auto text_path = std::string(TEST_DATA_DIR) + "/weicheng.utf8";
 
-    if (argc > 1) {
-        dict_path = argv[1];
-    }
-    if (argc > 2) {
-        model_path = argv[2];
-    }
-    if (argc > 3) {
-        text_path = argv[3];
-    }
-
-    constexpr auto ROUNDS = size_t{50};
-
-    std::printf("Dictionary : %s\n", dict_path.c_str());
-    std::printf("HMM Model  : %s\n", model_path.c_str());
-    std::printf("User Dict  : %s\n", user_dict_path.c_str());
-    std::printf("Text file  : %s\n", text_path.c_str());
-    std::printf("Rounds     : %zu\n\n", ROUNDS);
+// Load both Jieba instances, verify them against each other, then time the Neo core and both string pipelines.
+auto run(BenchmarkArgs args) -> void {
+    check_positional_count(args, 3, "Usage: jieba_benchmark [--benchmark_<flag>...] [dict [model [text]]]");
+    const auto dict_path = positional_argument(args, 1, std::string(DICT_DIR) + "/jieba.dict.utf8");
+    const auto model_path = positional_argument(args, 2, std::string(DICT_DIR) + "/hmm_model.utf8");
+    const auto user_dict_path = std::string(DICT_DIR) + "/user.dict.utf8";
+    const auto text_path = positional_argument(args, 3, std::string(TEST_DATA_DIR) + "/weicheng.utf8");
 
     // ── Load text ────────────────────────────────────────────────────────
-    auto lines = load_lines(text_path);
-    auto total_bytes = size_t{0};
-    for (auto &l : lines) {
-        total_bytes += l.size();
-    }
-    std::printf("Loaded %zu lines (%zu bytes UTF-8)\n\n", lines.size(), total_bytes);
+    const auto lines = require_lines(text_path);
 
     // ── Pre-decode all lines to Unicode (excluded from neo core timing) ──
     auto all_unicodes = std::vector<neo_cppjieba::detail::Unicode>{};
     all_unicodes.reserve(lines.size());
     auto total_runes = size_t{0};
-    for (auto &line : lines) {
+    for (const auto &line : lines) {
         all_unicodes.push_back(neo_cppjieba::Utf::decode(line));
         total_runes += all_unicodes.back().size();
     }
-    std::printf("Decoded %zu runes total\n\n", total_runes);
 
     // ── Construct Neo Jieba ──────────────────────────────────────────────
-    std::printf("Loading Neo Jieba ...\n");
     auto t0 = Clock::now();
-    auto jieba = neo_cppjieba::Jieba{dict_path, model_path, user_dict_path};
+    const auto jieba = neo_cppjieba::Jieba{dict_path, model_path, user_dict_path};
     auto t1 = Clock::now();
-    std::printf("Neo Jieba loaded in %.2f ms\n\n", Ms(t1 - t0).count());
+    const auto neo_load_ms = Ms(t1 - t0).count();
 
     // ── Construct Old Jieba ──────────────────────────────────────────────
-    std::printf("Loading Old Jieba ...\n");
     t0 = Clock::now();
-    auto old_jieba = cppjieba::Jieba{dict_path, model_path, user_dict_path};
+    const auto old_jieba = cppjieba::Jieba{dict_path, model_path, user_dict_path};
     t1 = Clock::now();
-    std::printf("Old Jieba loaded in %.2f ms\n\n", Ms(t1 - t0).count());
+    const auto old_load_ms = Ms(t1 - t0).count();
+
+    benchmark::AddCustomContext("dictionary", dict_path);
+    benchmark::AddCustomContext("hmm_model", model_path);
+    benchmark::AddCustomContext("user_dictionary", user_dict_path);
+    benchmark::AddCustomContext("text", text_path);
+    benchmark::AddCustomContext("lines", std::to_string(lines.size()));
+    benchmark::AddCustomContext("runes", std::to_string(total_runes));
+    benchmark::AddCustomContext("neo_load_ms", std::to_string(neo_load_ms));
+    benchmark::AddCustomContext("old_load_ms", std::to_string(old_load_ms));
 
     // =====================================================================
     // Part 1: Correctness verification (Old == Neo for each method)
     // =====================================================================
-    std::printf("═══════════════════════════════════════════════════════\n");
-    std::printf("  Correctness: Old vs Neo\n");
-    std::printf("═══════════════════════════════════════════════════════\n");
-
+    std::printf("Correctness: Old vs Neo\n");
     auto all_ok = true;
-
-    all_ok &= verify_method(
-        "MIX",
-        [&](const std::string &s) {
-            auto w = std::vector<std::string>{};
-            old_jieba.Cut(s, w);
-            return w;
-        },
-        [&](const std::string &s) { return jieba.cut_strings(s, neo_cppjieba::CutMode::MIX); }, lines);
-
-    all_ok &= verify_method(
-        "MP",
-        [&](const std::string &s) {
-            auto w = std::vector<std::string>{};
-            old_jieba.CutSmall(s, w, 99);
-            return w;
-        },
-        [&](const std::string &s) { return jieba.cut_strings(s, neo_cppjieba::CutMode::MP); }, lines);
-
-    all_ok &= verify_method(
-        "HMM",
-        [&](const std::string &s) {
-            auto w = std::vector<std::string>{};
-            old_jieba.CutHMM(s, w);
-            return w;
-        },
-        [&](const std::string &s) { return jieba.cut_strings(s, neo_cppjieba::CutMode::HMM); }, lines);
-
-    all_ok &= verify_method(
-        "FULL",
-        [&](const std::string &s) {
-            auto w = std::vector<std::string>{};
-            old_jieba.CutAll(s, w);
-            return w;
-        },
-        [&](const std::string &s) { return jieba.cut_strings(s, neo_cppjieba::CutMode::FULL); }, lines);
-
-    all_ok &= verify_method(
-        "SEARCH",
-        [&](const std::string &s) {
-            auto w = std::vector<std::string>{};
-            old_jieba.CutForSearch(s, w);
-            return w;
-        },
-        [&](const std::string &s) { return jieba.cut_strings(s, neo_cppjieba::CutMode::SEARCH); }, lines);
-
+    all_ok &= verify_mode<CM::MIX>("MIX", old_jieba, jieba, lines);
+    all_ok &= verify_mode<CM::MP>("MP", old_jieba, jieba, lines);
+    all_ok &= verify_mode<CM::HMM>("HMM", old_jieba, jieba, lines);
+    all_ok &= verify_mode<CM::FULL>("FULL", old_jieba, jieba, lines);
+    all_ok &= verify_mode<CM::SEARCH>("SEARCH", old_jieba, jieba, lines);
     all_ok &= verify_method(
         "TAG", [&](const std::string &s) { return old_tagged_words(old_jieba, s); },
         [&](const std::string &s) { return neo_tagged_words(jieba, s); }, lines);
-
     std::printf("\n");
     if (!all_ok) {
         std::printf("WARNING: Some methods differ. Benchmark proceeds anyway.\n\n");
@@ -321,203 +256,37 @@ auto main(int argc, char *argv[]) -> int {
     // =====================================================================
     // Part 2: Neo 5-method comparison (Unicode-level, core algorithm)
     // =====================================================================
-    std::printf("═══════════════════════════════════════════════════════\n");
-    std::printf("  Neo: 5 methods comparison (Unicode-level, %zu rounds)\n", ROUNDS);
-    std::printf("═══════════════════════════════════════════════════════\n\n");
-
-    auto neo_mix = bench_cut_unicode(
-        "Neo MIX  (MP + HMM)",
-        [&](const neo_cppjieba::detail::Unicode &u) { return jieba.cut_runes(u, neo_cppjieba::CutMode::MIX); },
-        all_unicodes, total_runes, ROUNDS);
-    print_report(neo_mix);
-
-    auto neo_mp = bench_cut_unicode(
-        "Neo MP   (dictionary-only)",
-        [&](const neo_cppjieba::detail::Unicode &u) { return jieba.cut_runes(u, neo_cppjieba::CutMode::MP); },
-        all_unicodes, total_runes, ROUNDS);
-    print_report(neo_mp);
-
-    auto neo_hmm = bench_cut_unicode(
-        "Neo HMM  (Viterbi only)",
-        [&](const neo_cppjieba::detail::Unicode &u) { return jieba.cut_runes(u, neo_cppjieba::CutMode::HMM); },
-        all_unicodes, total_runes, ROUNDS);
-    print_report(neo_hmm);
-
-    auto neo_full = bench_cut_unicode(
-        "Neo FULL (all dictionary words)",
-        [&](const neo_cppjieba::detail::Unicode &u) { return jieba.cut_runes(u, neo_cppjieba::CutMode::FULL); },
-        all_unicodes, total_runes, ROUNDS);
-    print_report(neo_full);
-
-    auto neo_search = bench_cut_unicode(
-        "Neo SEARCH (MIX + sub-word)",
-        [&](const neo_cppjieba::detail::Unicode &u) { return jieba.cut_runes(u, neo_cppjieba::CutMode::SEARCH); },
-        all_unicodes, total_runes, ROUNDS);
-    print_report(neo_search);
-
+    // Warm up: Google Benchmark's unreported iteration-count estimation runs precede every timed run.
+    register_core(jieba, all_unicodes, total_runes);
     // ── Neo methods summary table ────────────────────────────────────────
-    {
-        struct Entry {
-            const char *name;
-            double ms;
-        };
-        auto entries = std::array<Entry, 5>{{
-            {"MIX", neo_mix.total_ms},
-            {"MP", neo_mp.total_ms},
-            {"HMM", neo_hmm.total_ms},
-            {"FULL", neo_full.total_ms},
-            {"SEARCH", neo_search.total_ms},
-        }};
-        const auto &fastest = *std::ranges::min_element(entries, {}, &Entry::ms);
-
-        std::printf("──────────────────────────────────────────────────────────────\n");
-        std::printf("  Neo methods (ratio = time / fastest)\n");
-        std::printf("──────────────────────────────────────────────────────────────\n");
-        std::printf("  %-8s  %10s  %8s  %s\n", "Method", "Time (ms)", "Ratio", "");
-        std::printf("  ────────  ──────────  ────────  ─────────────────────────\n");
-        for (auto &e : entries) {
-            auto ratio = e.ms / fastest.ms;
-            auto rps = static_cast<double>(total_runes * ROUNDS) / (e.ms / 1000.0);
-            const auto *m = (e.ms == fastest.ms) ? " ◀ fastest" : "";
-            std::printf("  %-8s  %10.2f  %7.2fx  %6.2f Mr/s%s\n", e.name, e.ms, ratio, rps / 1e6, m);
-        }
-        std::printf("──────────────────────────────────────────────────────────────\n\n");
-    }
+    // ratio = time / fastest: compare the Core/<method> rows.
 
     // =====================================================================
     // Part 3: Old Jieba vs Neo Jieba (string-level, full pipeline)
     // =====================================================================
-    std::printf("═══════════════════════════════════════════════════════\n");
-    std::printf("  Old Jieba vs Neo Jieba (string → cut → strings, %zu rounds)\n", ROUNDS);
-    std::printf("═══════════════════════════════════════════════════════\n\n");
-
-    using CM = neo_cppjieba::CutMode;
-
-    // ── MIX ──
-    auto old_mix_r = bench_cut_string(
-        "Old Jieba.Cut  (MIX)",
-        [&](const std::string &s) {
-            auto w = std::vector<std::string>{};
-            old_jieba.Cut(s, w);
-            return w;
-        },
-        lines, total_runes, ROUNDS);
-    print_report(old_mix_r);
-
-    auto neo_mix_str = bench_cut_string(
-        "Neo Jieba.cut_strings(MIX)", [&](const std::string &s) { return jieba.cut_strings(s, CM::MIX); }, lines,
-        total_runes, ROUNDS);
-    print_report(neo_mix_str);
-
-    // ── MP ──
-    auto old_mp_r = bench_cut_string(
-        "Old Jieba.CutSmall  (MP)",
-        [&](const std::string &s) {
-            auto w = std::vector<std::string>{};
-            old_jieba.CutSmall(s, w, 99);
-            return w;
-        },
-        lines, total_runes, ROUNDS);
-    print_report(old_mp_r);
-
-    auto neo_mp_str = bench_cut_string(
-        "Neo Jieba.cut_strings(MP)", [&](const std::string &s) { return jieba.cut_strings(s, CM::MP); }, lines,
-        total_runes, ROUNDS);
-    print_report(neo_mp_str);
-
-    // ── HMM ──
-    auto old_hmm_r = bench_cut_string(
-        "Old Jieba.CutHMM  (HMM)",
-        [&](const std::string &s) {
-            auto w = std::vector<std::string>{};
-            old_jieba.CutHMM(s, w);
-            return w;
-        },
-        lines, total_runes, ROUNDS);
-    print_report(old_hmm_r);
-
-    auto neo_hmm_str = bench_cut_string(
-        "Neo Jieba.cut_strings(HMM)", [&](const std::string &s) { return jieba.cut_strings(s, CM::HMM); }, lines,
-        total_runes, ROUNDS);
-    print_report(neo_hmm_str);
-
-    // ── FULL ──
-    auto old_full_r = bench_cut_string(
-        "Old Jieba.CutAll  (FULL)",
-        [&](const std::string &s) {
-            auto w = std::vector<std::string>{};
-            old_jieba.CutAll(s, w);
-            return w;
-        },
-        lines, total_runes, ROUNDS);
-    print_report(old_full_r);
-
-    auto neo_full_str = bench_cut_string(
-        "Neo Jieba.cut_strings(FULL)", [&](const std::string &s) { return jieba.cut_strings(s, CM::FULL); }, lines,
-        total_runes, ROUNDS);
-    print_report(neo_full_str);
-
-    // ── SEARCH ──
-    auto old_query_r = bench_cut_string(
-        "Old Jieba.CutForSearch  (SEARCH)",
-        [&](const std::string &s) {
-            auto w = std::vector<std::string>{};
-            old_jieba.CutForSearch(s, w);
-            return w;
-        },
-        lines, total_runes, ROUNDS);
-    print_report(old_query_r);
-
-    auto neo_search_str = bench_cut_string(
-        "Neo Jieba.cut_strings(SEARCH)", [&](const std::string &s) { return jieba.cut_strings(s, CM::SEARCH); }, lines,
-        total_runes, ROUNDS);
-    print_report(neo_search_str);
-
+    register_string_method<CM::MIX>("MIX", old_jieba, jieba, lines, total_runes);
+    register_string_method<CM::MP>("MP", old_jieba, jieba, lines, total_runes);
+    register_string_method<CM::HMM>("HMM", old_jieba, jieba, lines, total_runes);
+    register_string_method<CM::FULL>("FULL", old_jieba, jieba, lines, total_runes);
+    register_string_method<CM::SEARCH>("SEARCH", old_jieba, jieba, lines, total_runes);
     // ── TAG ──
-    auto old_tag_r = bench_cut_string(
-        "Old Jieba.Tag  (MIX + POS)",
-        [&](const std::string &s) {
+    register_string_pair(
+        "TAG",
+        [&old_jieba](const std::string &s) {
             auto w = std::vector<std::pair<std::string, std::string>>{};
             old_jieba.Tag(s, w);
             return w;
         },
-        lines, total_runes, ROUNDS);
-    print_report(old_tag_r);
-
-    auto neo_tag_str = bench_cut_string(
-        "Neo Jieba.cut_strings<Pos>(MIX)",
-        [&](const std::string &s) { return jieba.cut_strings<neo_cppjieba::Tagging::Pos>(s, CM::MIX); }, lines,
-        total_runes, ROUNDS);
-    print_report(neo_tag_str);
-
+        [&jieba](const std::string &s) { return jieba.cut_strings<neo_cppjieba::Tagging::Pos>(s, CM::MIX); }, lines,
+        total_runes);
     // ── Old vs Neo summary table ─────────────────────────────────────────
-    {
-        struct Pair {
-            const char *name;
-            double old_ms;
-            double neo_ms;
-        };
-        auto pairs = std::array<Pair, 6>{{
-            {"MIX", old_mix_r.total_ms, neo_mix_str.total_ms},
-            {"MP", old_mp_r.total_ms, neo_mp_str.total_ms},
-            {"HMM", old_hmm_r.total_ms, neo_hmm_str.total_ms},
-            {"FULL", old_full_r.total_ms, neo_full_str.total_ms},
-            {"SEARCH", old_query_r.total_ms, neo_search_str.total_ms},
-            {"TAG", old_tag_r.total_ms, neo_tag_str.total_ms},
-        }};
+    // speedup = Old time / Neo time: compare each String/<method>/old row with String/<method>/neo.
 
-        std::printf("══════════════════════════════════════════════════════════════\n");
-        std::printf("  Old Jieba vs Neo Jieba  (speedup = Old time / Neo time)\n");
-        std::printf("══════════════════════════════════════════════════════════════\n");
-        std::printf("  %-8s  %12s  %12s  %8s  %s\n", "Method", "Old (ms)", "Neo (ms)", "Speedup", "");
-        std::printf("  ────────  ────────────  ────────────  ────────  ──────────\n");
-        for (auto &p : pairs) {
-            auto speedup = p.old_ms / p.neo_ms;
-            const auto *tag = p.neo_ms < p.old_ms ? "Neo ✓" : "Old ✓";
-            std::printf("  %-8s  %12.2f  %12.2f  %7.2fx  %s\n", p.name, p.old_ms, p.neo_ms, speedup, tag);
-        }
-        std::printf("══════════════════════════════════════════════════════════════\n");
-    }
+    benchmark::RunSpecifiedBenchmarks();
+}
 
-    return 0;
+} // namespace
+
+auto main(int argc, char *argv[]) -> int {
+    return benchmark_main(argc, argv, run);
 }

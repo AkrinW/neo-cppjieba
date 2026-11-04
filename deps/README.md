@@ -30,6 +30,22 @@ To select source discovery over installed packages, also pass
 FetchContent manages this optional source dependency in the build tree; the
 submodules below pin comparison implementations.
 
+## Google Benchmark
+
+`googlebenchmark.cmake` resolves the benchmark framework for `CPPJIEBA_BUILD_BENCHMARKS`
+in the same order: a parent `benchmark::benchmark` target, an installed package of
+version 1.8 or later through `find_package(benchmark 1.8 QUIET)`, then upstream
+`v1.10.0` through `FetchContent`. The source build disables the framework's own tests,
+so benchmark builds never fetch GoogleTest, and its `-Werror` default.
+
+```sh
+cmake -S . -B build-bench -DCPPJIEBA_BUILD_BENCHMARKS=ON \
+  -DFETCHCONTENT_SOURCE_DIR_GOOGLEBENCHMARK=/path/to/benchmark
+```
+
+Set `benchmark_DIR` or `CMAKE_PREFIX_PATH` to use an installed package; pass
+`-DCMAKE_DISABLE_FIND_PACKAGE_benchmark=ON` to select the source build.
+
 ## Pinned comparison sources
 
 | Dependency | Revision | CMake target |

@@ -87,7 +87,7 @@ if(NOT CPPJIEBA_SIMD STREQUAL "OFF")
     cppjieba_simd_probe(${CPPJIEBA_SIMD} COMPILES cppjieba_simd_supported)
     if(NOT cppjieba_simd_supported)
         message(FATAL_ERROR "CPPJIEBA_SIMD=${CPPJIEBA_SIMD} is not supported by this compiler and target: "
-            "SSE2 and AVX2 need x86-64, NEON needs AArch64 with GCC or Clang")
+            "SSE2 and AVX2 need x86-64, NEON needs AArch64")
     endif()
     cppjieba_simd_options(${CPPJIEBA_SIMD} cppjieba_simd_compile_options)
     target_compile_definitions(neo_cppjieba INTERFACE "CPPJIEBA_SIMD_${CPPJIEBA_SIMD}")

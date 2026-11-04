@@ -19,57 +19,27 @@
 #include "neo/resource/DictTrie.hpp"
 
 #include "BenchmarkUtils.hpp"
+#include "GoogleBenchmarkUtils.hpp"
 #include "test_paths.h"
 
-#include <algorithm>
 #include <array>
 #include <cstddef>
-#include <cstdio>
-#include <cstring>
-#include <numeric>
-#include <random>
+#include <cstdint>
 #include <span>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <vector>
 
+#include <benchmark/benchmark.h>
+
 namespace {
 
-struct BenchResult {
-    double seq_query_ms;
-    double rand_query_ms;
-    double miss_query_ms;
-    double short_miss_query_ms;
-    size_t num_entries;
-    size_t query_rounds;
-};
+namespace old = cppjieba;
+namespace neo = neo_cppjieba;
 
-static auto print_report(const char *label, const BenchResult &r) -> void {
-    auto total = static_cast<double>(r.num_entries * r.query_rounds);
-    auto fmt = [&](const char *name, double ms) {
-        auto ns = ms * 1e6 / total;
-        auto qps = total / (ms / 1000.0);
-        std::printf("│ %-26s│ %18.2f ms │\n", name, ms);
-        std::printf("│   per query               │ %18.1f ns │\n", ns);
-        std::printf("│   throughput              │ %15.2f Mq/s │\n", qps / 1e6);
-    };
-
-    std::printf("┌────────────────────────────────────────────────────┐\n");
-    std::printf("│ %-50s │\n", label);
-    std::printf("├───────────────────────────┬────────────────────────┤\n");
-    std::printf("│ Dict entries              │ %22zu │\n", r.num_entries);
-    std::printf("│ Query rounds              │ %22zu │\n", r.query_rounds);
-    std::printf("│ Total queries / test      │ %22.0f │\n", total);
-    std::printf("├───────────────────────────┼────────────────────────┤\n");
-    fmt("Seq query (all-hit)       ", r.seq_query_ms);
-    std::printf("├───────────────────────────┼────────────────────────┤\n");
-    fmt("Rand query (all-hit)      ", r.rand_query_ms);
-    std::printf("├───────────────────────────┼────────────────────────┤\n");
-    fmt("Miss query (mutated)      ", r.miss_query_ms);
-    std::printf("├───────────────────────────┼────────────────────────┤\n");
-    fmt("Short miss (1-rune)       ", r.short_miss_query_ms);
-    std::printf("└───────────────────────────┴────────────────────────┘\n\n");
-}
+// Seed of the shuffled all-hit query order, shared by both tries.
+constexpr auto kShuffleSeed = std::uint32_t{42};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Load raw UTF-8 words from dict file (word only, for query key generation)
@@ -89,228 +59,168 @@ static auto load_words(const std::string &dict_path) -> std::vector<std::string>
     return words;
 }
 
+// Register the four lookup kinds of one DictTrie under "<kind>/<name>"; find, keys and order outlive the run.
+template <typename FindFn, typename Key>
+auto register_lookups(const char *name, const FindFn &find, const std::vector<Key> &keys,
+                      const std::vector<size_t> &shuffled, const std::vector<Key> &miss_keys,
+                      const std::vector<Key> &short_miss_keys) -> void {
+    const auto label = std::string{name};
+    // ── Sequential query (all-hit) ───────────────────────────────────────
+    benchmark::RegisterBenchmark("SeqHit/" + label, [find, &keys](benchmark::State &state) {
+        time_lookups(state, find, keys);
+    })->Unit(benchmark::kMillisecond);
+    // ── Random query (all-hit) ───────────────────────────────────────────
+    benchmark::RegisterBenchmark("RandHit/" + label, [find, &keys, &shuffled](benchmark::State &state) {
+        time_lookups_in_order(state, find, keys, shuffled);
+    })->Unit(benchmark::kMillisecond);
+    // ── Miss query (mutated first rune) ──────────────────────────────────
+    benchmark::RegisterBenchmark("Miss/" + label, [find, &miss_keys](benchmark::State &state) {
+        time_lookups(state, find, miss_keys);
+    })->Unit(benchmark::kMillisecond);
+    // ── Short miss query (single rune) ───────────────────────────────────
+    benchmark::RegisterBenchmark("ShortMiss/" + label, [find, &short_miss_keys](benchmark::State &state) {
+        time_lookups(state, find, short_miss_keys);
+    })->Unit(benchmark::kMillisecond);
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Benchmark: Old DictTrie (cppjieba::DictTrie)
 // ─────────────────────────────────────────────────────────────────────────────
-static auto bench_old(const std::string &dict_path, const std::vector<std::string> &words, size_t rounds)
-    -> BenchResult {
-    namespace old = cppjieba;
+// Holds the old DictTrie and its query keys, all decoded before timing.
+class OldDictTrieBench {
+public:
+    OldDictTrieBench(const std::string &dict_path, const std::vector<std::string> &words)
+        // Build DictTrie (not timed — we only care about query performance)
+        : dict_trie_(dict_path), rune_arrays_(words.size()), miss_arrays_(words.size()),
+          short_miss_arrays_(words.size()) {
+        // ── Pre-decode all query keys (excluded from timing) ─────────────────
+        for (auto i = size_t{0}; i < words.size(); ++i) {
+            old::DecodeUTF8RunesInString(words[i], rune_arrays_[i]);
+        }
 
-    // Build DictTrie (not timed — we only care about query performance)
-    old::DictTrie dict_trie(dict_path);
+        // Shuffled indices
+        shuffled_ = shuffled_indices(words.size(), kShuffleSeed);
 
-    // ── Pre-decode all query keys (excluded from timing) ─────────────────
-    auto n = words.size();
+        // Miss keys: replace the first rune with a code point that won't appear in any dict word
+        for (auto i = size_t{0}; i < words.size(); ++i) {
+            miss_arrays_[i] = rune_arrays_[i];
+            if (!miss_arrays_[i].empty()) {
+                miss_arrays_[i][0].rune = 0x10FFFF;
+            }
+        }
 
-    auto rune_arrays = std::vector<old::RuneStrArray>(n);
-    for (auto i = size_t{0}; i < n; ++i) {
-        old::DecodeUTF8RunesInString(words[i], rune_arrays[i]);
-    }
-
-    // Shuffled indices
-    auto shuffled = std::vector<size_t>(n);
-    std::iota(shuffled.begin(), shuffled.end(), 0);
-    auto rng = std::mt19937{42};
-    std::ranges::shuffle(shuffled, rng);
-
-    // Miss keys: replace the first rune with a code point that won't appear in any dict word
-    auto miss_arrays = std::vector<old::RuneStrArray>(n);
-    for (auto i = size_t{0}; i < n; ++i) {
-        miss_arrays[i] = rune_arrays[i];
-        if (!miss_arrays[i].empty()) {
-            miss_arrays[i][0].rune = 0x10FFFF;
+        // Short miss keys: single rune that is unlikely to be in the dict
+        constexpr auto kMissRunes = std::array<old::Rune, 4>{0x10FFFE, 0x10FFFD, 0x10FFFC, 0x10FFFB};
+        for (auto i = size_t{0}; i < words.size(); ++i) {
+            old::RuneStr rs;
+            rs.rune = kMissRunes[i % 4];
+            rs.offset = 0;
+            rs.len = 1;
+            rs.unicode_offset = 0;
+            rs.unicode_length = 1;
+            short_miss_arrays_[i].push_back(rs);
         }
     }
+    OldDictTrieBench(const OldDictTrieBench &) = delete;
+    auto operator=(const OldDictTrieBench &) -> OldDictTrieBench & = delete;
 
-    // Short miss keys: single rune that is unlikely to be in the dict
-    constexpr auto kMissRunes = std::array<old::Rune, 4>{0x10FFFE, 0x10FFFD, 0x10FFFC, 0x10FFFB};
-    auto short_miss_arrays = std::vector<old::RuneStrArray>(n);
-    for (auto i = size_t{0}; i < n; ++i) {
-        old::RuneStr rs;
-        rs.rune = kMissRunes[i % 4];
-        rs.offset = 0;
-        rs.len = 1;
-        rs.unicode_offset = 0;
-        rs.unicode_length = 1;
-        short_miss_arrays[i].push_back(rs);
+    auto register_benchmarks() const -> void {
+        const auto find = [this](const old::RuneStrArray &ra) {
+            return dict_trie_.Find(ra.begin(), ra.end());
+        };
+        register_lookups("old", find, rune_arrays_, shuffled_, miss_arrays_, short_miss_arrays_);
     }
 
-    // ── Sequential query (all-hit) ───────────────────────────────────────
-    auto t0 = Clock::now();
-    for (auto round = size_t{0}; round < rounds; ++round) {
-        for (auto i = size_t{0}; i < n; ++i) {
-            auto &ra = rune_arrays[i];
-            const auto *result = dict_trie.Find(ra.begin(), ra.end());
-            DoNotOptimize(result);
-        }
-    }
-    auto t1 = Clock::now();
-
-    // ── Random query (all-hit) ───────────────────────────────────────────
-    auto t2 = Clock::now();
-    for (auto round = size_t{0}; round < rounds; ++round) {
-        for (auto idx : shuffled) {
-            auto &ra = rune_arrays[idx];
-            const auto *result = dict_trie.Find(ra.begin(), ra.end());
-            DoNotOptimize(result);
-        }
-    }
-    auto t3 = Clock::now();
-
-    // ── Miss query (mutated first rune) ──────────────────────────────────
-    auto t4 = Clock::now();
-    for (auto round = size_t{0}; round < rounds; ++round) {
-        for (auto i = size_t{0}; i < n; ++i) {
-            auto &ra = miss_arrays[i];
-            const auto *result = dict_trie.Find(ra.begin(), ra.end());
-            DoNotOptimize(result);
-        }
-    }
-    auto t5 = Clock::now();
-
-    // ── Short miss query (single rune) ───────────────────────────────────
-    auto t6 = Clock::now();
-    for (auto round = size_t{0}; round < rounds; ++round) {
-        for (auto i = size_t{0}; i < n; ++i) {
-            auto &ra = short_miss_arrays[i];
-            const auto *result = dict_trie.Find(ra.begin(), ra.end());
-            DoNotOptimize(result);
-        }
-    }
-    auto t7 = Clock::now();
-
-    return {
-        Ms(t1 - t0).count(), Ms(t3 - t2).count(), Ms(t5 - t4).count(), Ms(t7 - t6).count(), n, rounds,
-    };
-}
+private:
+    old::DictTrie dict_trie_;
+    std::vector<old::RuneStrArray> rune_arrays_;
+    std::vector<size_t> shuffled_;
+    std::vector<old::RuneStrArray> miss_arrays_;
+    std::vector<old::RuneStrArray> short_miss_arrays_;
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Benchmark: Neo DictTrie (neo_cppjieba::detail::DictTrie)
 // ─────────────────────────────────────────────────────────────────────────────
-static auto bench_neo(const std::string &dict_path, const std::vector<std::string> &words, size_t rounds)
-    -> BenchResult {
-    namespace neo = neo_cppjieba;
+// Holds the Neo DictTrie and its query keys, all decoded before timing.
+class NeoDictTrieBench {
+public:
+    NeoDictTrieBench(const std::string &dict_path, const std::vector<std::string> &words)
+        // Build DictTrie (not timed)
+        : dict_trie_{dict_path, "", neo::detail::UserWordWeightOption::WordWeightMedian}, keys_(words.size()),
+          miss_keys_(words.size()), short_miss_keys_(words.size()) {
+        // ── Pre-decode all query keys (excluded from timing) ─────────────────
+        for (auto i = size_t{0}; i < words.size(); ++i) {
+            keys_[i] = neo::Utf::decode(words[i]);
+        }
 
-    // Build DictTrie (not timed)
-    auto dict_trie = neo::detail::DictTrie{dict_path, "", neo::detail::UserWordWeightOption::WordWeightMedian};
+        // Shuffled indices
+        shuffled_ = shuffled_indices(words.size(), kShuffleSeed);
 
-    // ── Pre-decode all query keys (excluded from timing) ─────────────────
-    auto n = words.size();
+        // Miss keys: replace the first rune
+        for (auto i = size_t{0}; i < words.size(); ++i) {
+            miss_keys_[i] = keys_[i];
+            if (!miss_keys_[i].empty()) {
+                miss_keys_[i][0] = 0x10FFFF;
+            }
+        }
 
-    auto keys = std::vector<neo::detail::Unicode>(n);
-    for (auto i = size_t{0}; i < n; ++i) {
-        keys[i] = neo::Utf::decode(words[i]);
-    }
-
-    // Shuffled indices
-    auto shuffled = std::vector<size_t>(n);
-    std::iota(shuffled.begin(), shuffled.end(), 0);
-    auto rng = std::mt19937{42};
-    std::ranges::shuffle(shuffled, rng);
-
-    // Miss keys: replace the first rune
-    auto miss_keys = std::vector<neo::detail::Unicode>(n);
-    for (auto i = size_t{0}; i < n; ++i) {
-        miss_keys[i] = keys[i];
-        if (!miss_keys[i].empty()) {
-            miss_keys[i][0] = 0x10FFFF;
+        // Short miss keys: single rune
+        constexpr auto kMissRunes = std::array<neo::Rune, 4>{0x10FFFE, 0x10FFFD, 0x10FFFC, 0x10FFFB};
+        for (auto i = size_t{0}; i < words.size(); ++i) {
+            short_miss_keys_[i] = {kMissRunes[i % 4]};
         }
     }
+    NeoDictTrieBench(const NeoDictTrieBench &) = delete;
+    auto operator=(const NeoDictTrieBench &) -> NeoDictTrieBench & = delete;
 
-    // Short miss keys: single rune
-    constexpr auto kMissRunes = std::array<neo::Rune, 4>{0x10FFFE, 0x10FFFD, 0x10FFFC, 0x10FFFB};
-    auto short_miss_keys = std::vector<neo::detail::Unicode>(n);
-    for (auto i = size_t{0}; i < n; ++i) {
-        short_miss_keys[i] = {kMissRunes[i % 4]};
+    auto register_benchmarks() const -> void {
+        const auto find = [this](const neo::detail::Unicode &key) {
+            return dict_trie_.find(std::span<const neo::Rune>{key});
+        };
+        register_lookups("neo", find, keys_, shuffled_, miss_keys_, short_miss_keys_);
     }
 
-    // ── Sequential query (all-hit) ───────────────────────────────────────
-    auto t0 = Clock::now();
-    for (auto round = size_t{0}; round < rounds; ++round) {
-        for (auto i = size_t{0}; i < n; ++i) {
-            auto result = dict_trie.find(std::span<const neo::Rune>{keys[i]});
-            DoNotOptimize(result);
-        }
-    }
-    auto t1 = Clock::now();
-
-    // ── Random query (all-hit) ───────────────────────────────────────────
-    auto t2 = Clock::now();
-    for (auto round = size_t{0}; round < rounds; ++round) {
-        for (auto idx : shuffled) {
-            auto result = dict_trie.find(std::span<const neo::Rune>{keys[idx]});
-            DoNotOptimize(result);
-        }
-    }
-    auto t3 = Clock::now();
-
-    // ── Miss query (mutated first rune) ──────────────────────────────────
-    auto t4 = Clock::now();
-    for (auto round = size_t{0}; round < rounds; ++round) {
-        for (auto i = size_t{0}; i < n; ++i) {
-            auto result = dict_trie.find(std::span<const neo::Rune>{miss_keys[i]});
-            DoNotOptimize(result);
-        }
-    }
-    auto t5 = Clock::now();
-
-    // ── Short miss query (single rune) ───────────────────────────────────
-    auto t6 = Clock::now();
-    for (auto round = size_t{0}; round < rounds; ++round) {
-        for (auto i = size_t{0}; i < n; ++i) {
-            auto result = dict_trie.find(std::span<const neo::Rune>{short_miss_keys[i]});
-            DoNotOptimize(result);
-        }
-    }
-    auto t7 = Clock::now();
-
-    return {
-        Ms(t1 - t0).count(), Ms(t3 - t2).count(), Ms(t5 - t4).count(), Ms(t7 - t6).count(), n, rounds,
-    };
-}
-} // namespace
+private:
+    neo::detail::DictTrie dict_trie_;
+    std::vector<neo::detail::Unicode> keys_;
+    std::vector<size_t> shuffled_;
+    std::vector<neo::detail::Unicode> miss_keys_;
+    std::vector<neo::detail::Unicode> short_miss_keys_;
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Main
 // ─────────────────────────────────────────────────────────────────────────────
-auto main(int argc, char *argv[]) -> int {
-    auto dict_path = std::string(DICT_DIR) + "/jieba.dict.utf8";
-    if (argc > 1) {
-        dict_path = argv[1];
+
+// Load the query words, build both DictTries, then time each lookup kind.
+auto run(BenchmarkArgs args) -> void {
+    check_positional_count(args, 1, "Usage: dict_trie_benchmark [--benchmark_<flag>...] [dict]");
+    const auto dict_path = positional_argument(args, 1, std::string(DICT_DIR) + "/jieba.dict.utf8");
+    const auto words = load_words(dict_path);
+    if (words.empty()) {
+        throw std::runtime_error("no dictionary words loaded from " + dict_path);
     }
-
-    constexpr auto QUERY_ROUNDS = size_t{10};
-
-    std::printf("Loading dictionary: %s\n", dict_path.c_str());
-    auto words = load_words(dict_path);
-    std::printf("Loaded %zu words for querying.\n", words.size());
-    std::printf("Query rounds: %zu  (total queries per test = %zu)\n\n", QUERY_ROUNDS, words.size() * QUERY_ROUNDS);
+    benchmark::AddCustomContext("dictionary", dict_path);
+    benchmark::AddCustomContext("query_words", std::to_string(words.size()));
 
     // ── Old DictTrie ─────────────────────────────────────────────────────
-    std::printf("Benchmarking Old DictTrie ...\n");
-    auto old_result = bench_old(dict_path, words, QUERY_ROUNDS);
-    print_report("Old DictTrie (unordered_map per TrieNode, pointer)", old_result);
+    // Old DictTrie (unordered_map per TrieNode, pointer)
+    const auto old_bench = OldDictTrieBench{dict_path, words};
+    old_bench.register_benchmarks();
 
     // ── Neo DictTrie ─────────────────────────────────────────────────────
-    std::printf("Benchmarking Neo DictTrie ...\n");
-    auto neo_result = bench_neo(dict_path, words, QUERY_ROUNDS);
-    print_report("Neo DictTrie (flat vector, BFS layout, inline value)", neo_result);
+    // Neo DictTrie (flat vector, BFS layout, inline value)
+    const auto neo_bench = NeoDictTrieBench{dict_path, words};
+    neo_bench.register_benchmarks();
 
     // ── Comparison ───────────────────────────────────────────────────────
-    auto cmp = [](const char *label, double old_ms, double neo_ms) {
-        auto r = old_ms / neo_ms;
-        const auto *tag = neo_ms < old_ms ? "(Neo faster)" : "(Old faster)";
-        std::printf("  %-24s: %5.2fx  %s\n", label, r, tag);
-    };
+    // speedup = Old time / Neo time: compare each <kind>/old row with <kind>/neo.
+    benchmark::RunSpecifiedBenchmarks();
+}
 
-    std::printf("══════════════════════════════════════════════════════\n");
-    std::printf("  COMPARISON  (speedup = Old time / Neo time)\n");
-    std::printf("══════════════════════════════════════════════════════\n");
-    cmp("Seq query (all-hit)", old_result.seq_query_ms, neo_result.seq_query_ms);
-    cmp("Rand query (all-hit)", old_result.rand_query_ms, neo_result.rand_query_ms);
-    cmp("Miss query (mutated)", old_result.miss_query_ms, neo_result.miss_query_ms);
-    cmp("Short miss (1-rune)", old_result.short_miss_query_ms, neo_result.short_miss_query_ms);
-    std::printf("══════════════════════════════════════════════════════\n");
+} // namespace
 
-    return 0;
+auto main(int argc, char *argv[]) -> int {
+    return benchmark_main(argc, argv, run);
 }

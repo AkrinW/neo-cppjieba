@@ -25,8 +25,8 @@ inline constexpr auto level = SimdLevel::AVX2;
 #endif
 inline constexpr auto level = SimdLevel::SSE2;
 #elif defined(CPPJIEBA_SIMD_NEON)
-#if !defined(__aarch64__) || !defined(__ARM_NEON)
-#error "CPPJIEBA_SIMD_NEON requires an AArch64 target with NEON, built by GCC or Clang"
+#if !((defined(__aarch64__) && defined(__ARM_NEON)) || (defined(_M_ARM64) && !defined(_M_ARM64EC)))
+#error "CPPJIEBA_SIMD_NEON requires an AArch64 target with NEON"
 #endif
 inline constexpr auto level = SimdLevel::NEON;
 #else

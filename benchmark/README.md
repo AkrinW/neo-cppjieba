@@ -60,17 +60,66 @@ subdirectory for multi-configuration generators).
 | `unicode_benchmark` | Unicode decoding and encoding | none |
 | `prefilter_benchmark` | Input prefiltering | none |
 | `query_segment_benchmark` | Query segmentation strategies | none |
+| `simd_compare_benchmark` | Neo segmentation of one `CPPJIEBA_SIMD` build | none |
 | `cut_compare_benchmark` | Old, neo and Rust segmentation | old cppjieba, jieba-rs |
 | `python_compare_benchmark.py` | The same native paths plus Python `list[str]` | `cut_compare_benchmark`, Python jieba |
 
-The first ten targets are built by the benchmark option. The Rust target also
+The first eleven targets are built by the benchmark option. The Rust target also
 requires `CPPJIEBA_BUILD_RUST_BENCHMARKS=ON` and Cargo. Its adapter links through
 `jieba_rs::jieba_rs`; see [RUST.md](RUST.md) for the output contracts and commands.
 
+Every C++ target in the table except `load_test` and `cut_compare_benchmark` runs on
+[Google Benchmark](../deps/README.md#google-benchmark), through the shared `GoogleBenchmarkUtils.hpp`. Each one
+checks its inputs, and that the implementations it compares agree, before timing; then it reports one row per case,
+named `<case>/<implementation>` such as `DAG/old` and `DAG/neo`. Compare those rows for speedups. Google Benchmark's
+flags may appear anywhere on the command line, for example `--benchmark_filter=Miss`, `--benchmark_repetitions=5` or
+`--benchmark_out=report.json --benchmark_out_format=json`; the positional arguments keep their earlier meanings.
+Iterations that process a whole corpus report `items_per_second` (lines) and `runes` per second.
+
+`simd_compare_benchmark` times the same Neo translation unit as `cut_compare_benchmark` in MIX, MP, FULL, SEARCH
+and HMM, for string, borrowed and reused outputs (`MIX/strings` … `HMM/reused`), without the old CppJieba or Rust
+engines. Each iteration is one corpus pass timed by the engine itself. The report context records the build's
+`CPPJIEBA_SIMD` level and each mode's token count and FNV-1a token-range digest, so builds at different levels can
+be checked for identical output and timed against each other on the same machine. Google Benchmark flags may appear
+anywhere; the positional arguments are `[dict [model [text]]]`:
+
+```sh
+build-bench/benchmark/simd_compare_benchmark --benchmark_repetitions=5 \
+  --benchmark_enable_random_interleaving=true --benchmark_out=simd-off.json --benchmark_out_format=json \
+  dict/jieba.dict.utf8 dict/hmm_model.utf8 test/testdata/weicheng.utf8
+```
+
+Google Benchmark's `tools/compare.py` can compare two such reports locally; it needs NumPy and SciPy.
+
+`simd_ab_benchmark.py` compares several such builds on one machine. Each round runs every build once in a rotated
+order, plus the OFF build a second time, so each SIMD/OFF ratio pairs a run with the OFF run of the same round and
+the second OFF run (A/A) shows the machine's own noise. It stops when a build reports another level, cuts any mode
+differently from OFF, or reports a benchmark error. It writes a Markdown table, with the median and range of each
+benchmark's per-round change in bold when every round lies outside the A/A range, and a JSON summary that keeps the
+per-round medians. Build every level with the same compiler and flags, ideally with `-falign-functions=64` so code
+placement adds no noise, and pin the script to one CPU where the platform allows:
+
+```sh
+taskset -c 2 python3 benchmark/simd_ab_benchmark.py \
+  --variant OFF=build-off/benchmark/simd_compare_benchmark \
+  --variant AVX2=build-avx2/benchmark/simd_compare_benchmark \
+  --dict dict/jieba.dict.utf8 --model dict/hmm_model.utf8 --text test/testdata/weicheng.utf8 \
+  --title "Linux x64 / GCC" --markdown simd.md --json simd.json
+```
+
+`python3 -B -m unittest discover -s benchmark -p 'simd_ab_benchmark_test.py'` runs its unit tests.
+
+The `SIMD benchmarks` workflow (`.github/workflows/simd-benchmark.yml`) runs this comparison on every pull request:
+Linux x64 and Windows x64 compare OFF, SSE2 and AVX2; Linux ARM64, Windows ARM64 and macOS compare OFF and NEON.
+Each platform builds and times all of its levels in one job on `weicheng.utf8`, five rounds of three repetitions,
+writes its table to the job summary, and a final job collects the tables into one pull-request comment. A build
+whose output differs from OFF fails its job; timing changes are only reported.
+
 `load_benchmark` first checks that snapshot and text loading cut and tag the corpus identically, then times
-each loading stage. `--rounds N` sets the rounds per case (default 9); `--cold` evicts the input files from
-the page cache before every round, which Linux allows without root. Model loading writes info logs to
-stderr, so redirect it to read the table alone:
+each loading stage. `--rounds N` sets the rounds per case (default 9); each round is one load, reported as a
+Google Benchmark repetition, and each case shows the mean, median, spread, minimum and maximum. `--cold` evicts
+the input files from the page cache before every round, which Linux allows without root. Model loading writes
+info logs to stderr, so redirect it to read the table alone:
 
 ```sh
 build-bench/benchmark/load_benchmark --cold 2>/dev/null

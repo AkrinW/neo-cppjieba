@@ -16,14 +16,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-26, windows-2025-vs2026]
+        os: [macos-26, windows-2025-vs2026, windows-11-vs2026-arm]
         build_type: [Debug, Release]
         simd: ["OFF"]
         # MSVC compiles the x86 kernels only here (AVX2 builds include the SSE2 backend); macOS runners are arm64,
         # where NEON builds the scalar fallbacks until NEON kernels exist.
+        # windows-11-vs2026-arm holds the only MSVC ARM64 builds, so its NEON level runs in Debug and Release.
         include:
           - {os: windows-2025-vs2026, build_type: Debug, simd: AVX2}
           - {os: windows-2025-vs2026, build_type: Release, simd: AVX2}
+          - {os: windows-11-vs2026-arm, build_type: Debug, simd: NEON}
+          - {os: windows-11-vs2026-arm, build_type: Release, simd: NEON}
           - {os: macos-26, build_type: Release, simd: NEON}
 
     steps:
@@ -52,7 +55,7 @@ jobs:
       - name: Configure Windows
         if: runner.os == 'Windows'
         run: >-
-          cmake -S . -B build -G "Visual Studio 18 2026" -A x64
+          cmake -S . -B build -G "Visual Studio 18 2026" -A ${{ runner.arch == 'ARM64' && 'ARM64' || 'x64' }}
           -DBUILD_TESTING=ON -DCPPJIEBA_BUILD_C_API=OFF -DCPPJIEBA_BUILD_EXAMPLES=ON -DCPPJIEBA_BUILD_BENCHMARKS=ON
           -DCPPJIEBA_SIMD=${{ matrix.simd }}
 
