@@ -110,7 +110,8 @@ taskset -c 2 python3 benchmark/simd_ab_benchmark.py \
 `python3 -B -m unittest discover -s benchmark -p 'simd_ab_benchmark_test.py'` runs its unit tests.
 
 The `SIMD benchmarks` workflow (`.github/workflows/simd-benchmark.yml`) runs this comparison on every pull request:
-Linux x64 and Windows x64 compare OFF, SSE2 and AVX2; Linux ARM64, Windows ARM64 and macOS compare OFF and NEON.
+Linux x64 and Windows x64 compare OFF, SSE2 and AVX2; Linux ARM64 and Windows ARM64 compare OFF and NEON. macOS is
+left out because its virtualized runners varied by up to 60% between two OFF runs.
 Each platform builds and times all of its levels in one job on `weicheng.utf8`, five rounds of three repetitions,
 writes its table to the job summary, and a final job collects the tables into one pull-request comment. A build
 whose output differs from OFF fails its job; timing changes are only reported.
@@ -187,8 +188,8 @@ under the ignored `benchmark/results/ci/` directory.
 
 Build, test and benchmark execution errors fail CI. Timing ratios have no pass/fail
 threshold on shared runners; the existing benchmark suppresses rankings when
-segmentation results differ. macOS and Windows compile the C++ benchmarks as part
-of their platform jobs; the four-language measurements currently run on Linux x64.
+segmentation results differ. Every platform job of the CMake workflow compiles the C++
+benchmarks; the four-language measurements currently run on Linux x64.
 
 Pull requests from branches in this repository also receive one benchmark comment,
 updated in place by `marocchino/sticky-pull-request-comment`. It reuses the Actions

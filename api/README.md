@@ -28,7 +28,7 @@ select at least one library form.
 | --- | --- | --- |
 | Linux x64/ARM64, GCC 16 | `libneo_cppjieba_c.so.1` | `libneo_cppjieba_c.a` |
 | macOS ARM64, LLVM 23/libc++ | `libneo_cppjieba_c.1.dylib` | `libneo_cppjieba_c.a` |
-| Windows x64, MSVC 2026 | `neo_cppjieba_c.dll` and import library `neo_cppjieba_c.lib` | `neo_cppjieba_c_static.lib` |
+| Windows x64/ARM64, MSVC 2026 | `neo_cppjieba_c.dll` and import library `neo_cppjieba_c.lib` | `neo_cppjieba_c_static.lib` |
 
 CI covers Debug and Release builds. Binary compatibility applies within the same
 platform ABI, with matching architecture, deployment target and system requirements.
