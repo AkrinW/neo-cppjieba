@@ -1,0 +1,10 @@
+# Tokens for simd_kernels inputs: raw runes (0xC0 then four bytes) and raw doubles (0xF0 then eight bytes),
+# little-endian, at the separators, the sign bit, the CppJieba floor, signed zero and the bounds of accepted scores.
+
+fullwidth_comma="\xC0\x0C\xFF\x00\x00"
+ideographic_full_stop="\xC0\x02\x30\x00\x00"
+sign_bit_space="\xC0\x20\x00\x00\x80"
+min_double="\xF0\x65\x47\x48\x5C\x3B\xB6\xCC\xD4"
+negative_zero="\xF0\x00\x00\x00\x00\x00\x00\x00\x80"
+smallest_subnormal="\xF0\x01\x00\x00\x00\x00\x00\x00\x00"
+largest_raw="\xF0\x7D\xC3\x94\x25\xAD\x49\xB2\x54"
