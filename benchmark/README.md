@@ -109,6 +109,12 @@ taskset -c 2 python3 benchmark/simd_ab_benchmark.py \
 
 `python3 -B -m unittest discover -s benchmark -p 'simd_ab_benchmark_test.py'` runs its unit tests.
 
+The `SIMD benchmarks` workflow (`.github/workflows/simd-benchmark.yml`) runs this comparison on every pull request:
+Linux x64 and Windows x64 compare OFF, SSE2 and AVX2; Linux ARM64, Windows ARM64 and macOS compare OFF and NEON.
+Each platform builds and times all of its levels in one job on `weicheng.utf8`, five rounds of three repetitions,
+writes its table to the job summary, and a final job collects the tables into one pull-request comment. A build
+whose output differs from OFF fails its job; timing changes are only reported.
+
 `load_benchmark` first checks that snapshot and text loading cut and tag the corpus identically, then times
 each loading stage. `--rounds N` sets the rounds per case (default 9); each round is one load, reported as a
 Google Benchmark repetition, and each case shows the mean, median, spread, minimum and maximum. `--cold` evicts

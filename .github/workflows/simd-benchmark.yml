@@ -1,0 +1,181 @@
+name: SIMD benchmarks
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A newer push to the same pull request supersedes the comparison still running for the previous head.
+concurrency:
+  group: simd-benchmark-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compare:
+    name: SIMD A/B / ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      fail-fast: false
+      # Every level of one platform is built and timed in the same job, so its ratios never compare different runners.
+      matrix:
+        include:
+          - {platform: linux-x64, title: "Linux x64 / GCC 16", os: ubuntu-26.04, levels: "OFF SSE2 AVX2"}
+          - {platform: linux-arm64, title: "Linux ARM64 / GCC 16", os: ubuntu-26.04-arm, levels: "OFF NEON"}
+          - {platform: windows-x64, title: "Windows x64 / MSVC", os: windows-2025-vs2026, levels: "OFF SSE2 AVX2"}
+          - {platform: windows-arm64, title: "Windows ARM64 / MSVC", os: windows-11-vs2026-arm, levels: "OFF NEON"}
+          - {platform: macos-arm64, title: "macOS ARM64 / Clang 23", os: macos-26, levels: "OFF NEON"}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Initialize comparison dependencies required by the benchmark configuration
+        run: git submodule update --init deps/cppjieba deps/limonp
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.14.8"
+
+      - name: Install C++23 compiler on Linux
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y g++-16
+
+      - name: Install LLVM and libc++ on macOS
+        if: runner.os == 'macOS'
+        run: brew install llvm@23
+
+      - name: Driver unit tests
+        if: matrix.platform == 'linux-x64'
+        run: python -B -m unittest discover -s benchmark -p 'simd_ab_benchmark_test.py' -v
+
+      # -falign-functions=64 keeps code placement from moving timings between builds; MSVC has no equivalent flag.
+      - name: Build simd_compare_benchmark at each level
+        env:
+          LEVELS: ${{ matrix.levels }}
+          WINDOWS_ARCH: ${{ runner.arch == 'ARM64' && 'ARM64' || 'x64' }}
+        run: |
+          for level in $LEVELS; do
+            common=(-S . -B "build-$level" -DBUILD_TESTING=OFF -DCPPJIEBA_BUILD_BENCHMARKS=ON -DCPPJIEBA_SIMD="$level")
+            case "$RUNNER_OS" in
+              Linux)
+                cmake "${common[@]}" -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=g++-16 \
+                  -DCMAKE_CXX_FLAGS=-falign-functions=64 ;;
+              macOS)
+                llvm_prefix="$(brew --prefix llvm@23)"
+                cmake "${common[@]}" -G Ninja -DCMAKE_BUILD_TYPE=Release \
+                  -DCMAKE_C_COMPILER="$llvm_prefix/bin/clang" -DCMAKE_CXX_COMPILER="$llvm_prefix/bin/clang++" \
+                  -DCMAKE_CXX_FLAGS="-stdlib=libc++ -falign-functions=64" \
+                  -DCMAKE_EXE_LINKER_FLAGS="-L$llvm_prefix/lib/c++ -L$llvm_prefix/lib/unwind -lunwind -Wl,-rpath,$llvm_prefix/lib/c++ -Wl,-rpath,$llvm_prefix/lib/unwind" ;;
+              Windows)
+                cmake "${common[@]}" -G "Visual Studio 18 2026" -A "$WINDOWS_ARCH" ;;
+            esac
+            cmake --build "build-$level" --config Release --target simd_compare_benchmark --parallel 4
+          done
+
+      - name: Compare levels
+        env:
+          LEVELS: ${{ matrix.levels }}
+          TITLE: ${{ matrix.title }}
+        run: |
+          case "$RUNNER_OS" in
+            Linux) cpu_model="$(lscpu | sed -n 's/^Model name: *//p' | head -n 1)" ;;
+            macOS) cpu_model="$(sysctl -n machdep.cpu.brand_string)" ;;
+            Windows)
+              cpu_model="$(powershell -NoProfile -Command '(Get-CimInstance Win32_Processor).Name' | tr -d '\r')" ;;
+          esac
+          variants=()
+          for level in $LEVELS; do
+            if [ "$RUNNER_OS" = Windows ]; then
+              variants+=(--variant "$level=build-$level/benchmark/Release/simd_compare_benchmark.exe")
+            else
+              variants+=(--variant "$level=build-$level/benchmark/simd_compare_benchmark")
+            fi
+          done
+          # Linux pins every run to one CPU; the other hosted runners offer no affinity control to the shell.
+          pin=()
+          if [ "$RUNNER_OS" = Linux ]; then
+            pin=(taskset -c "$(python -c 'import os; print(min(os.sched_getaffinity(0)))')")
+          fi
+          mkdir -p reports
+          "${pin[@]}" python -B benchmark/simd_ab_benchmark.py "${variants[@]}" \
+            --dict dict/jieba.dict.utf8 --model dict/hmm_model.utf8 --text test/testdata/weicheng.utf8 \
+            --rounds 5 --repetitions 3 --min-time 0.1s --title "$TITLE · $cpu_model" \
+            --markdown reports/simd-ab.md --json reports/simd-ab.json
+
+      - name: Write job summary
+        if: always() && hashFiles('reports/simd-ab.md') != ''
+        run: cat reports/simd-ab.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload comparison report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: simd-ab-${{ matrix.platform }}
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  comment:
+    name: SIMD benchmark PR comment
+    needs: compare
+    if: >-
+      always() && !cancelled() && github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-26.04
+    permissions:
+      actions: read
+      pull-requests: write
+    steps:
+      - name: Check that this is still the current PR head
+        id: current
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const { data: pull } = await github.rest.pulls.get({
+              ...context.repo,
+              pull_number: context.issue.number,
+            });
+            return pull.state === 'open' && pull.head.sha === context.payload.pull_request.head.sha;
+
+      - name: Download comparison reports
+        if: steps.current.outputs.result == 'true'
+        # Every platform may have failed before writing a report; the comment then says so for each one.
+        continue-on-error: true
+        uses: actions/download-artifact@v8
+        with:
+          pattern: simd-ab-*
+          path: reports
+
+      - name: Assemble comment
+        if: steps.current.outputs.result == 'true'
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          {
+            echo "## SIMD A/B benchmarks"
+            echo
+            echo "Head ${HEAD_SHA::7} ([run]($RUN_URL)). Each platform builds every level in one job and compares"
+            echo "it with the OFF build on the same runner; absolute times are not comparable across platforms or runs."
+            echo
+            for platform in linux-x64 linux-arm64 windows-x64 windows-arm64 macos-arm64; do
+              report="reports/simd-ab-$platform/simd-ab.md"
+              if [ -f "$report" ]; then
+                cat "$report"
+              else
+                printf '### %s\n\nNo report: the job stopped before the comparison finished.\n\n' "$platform"
+              fi
+            done
+          } > summary.md
+
+      - name: Update SIMD benchmark comment
+        if: steps.current.outputs.result == 'true'
+        uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
+        with:
+          header: simd-benchmark
+          path: summary.md

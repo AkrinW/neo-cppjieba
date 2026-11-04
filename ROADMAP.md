@@ -104,6 +104,8 @@
 - [x] Viterbi 的 SSE2 / AVX2 内核，CPP 与 Python/Rust 两种规则各一个，保持加法顺序和平局规则，结果与标量逐位一致：
   CPP 规则让 MIX 和 SEARCH 快约 1%–4%、HMM 模式快约 15%–24%，Python/Rust 规则让 HMM 模式快约 24%–28%。
 - [x] CI 以 SSE2、AVX2、NEON 运行全部测试，`simd_kernels` fuzz 目标逐位比较各内核与标量参考。
+- [x] 每个 PR 在 Linux、Windows（x64 与 ARM64）和 macOS 上于同一 job 内对比 OFF 与各 SIMD 级别，
+  检查输出一致并把耗时变化与 OFF 对 OFF 的噪声汇总到 PR 评论，见 [benchmark 指南](benchmark/README.md)。
 - [ ] 分隔符扫描和 Viterbi 的 NEON 内核；目前 `NEON` 级别全部使用标量实现。
 - [ ] UTF-8 解码快速路径：2026-11 试做的 SSE4.2 / AVX2 版本只让 MIX 快约 0.5%，短文本还有回退，已搁置；
   解码占比变大后再考虑。
