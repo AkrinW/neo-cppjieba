@@ -91,6 +91,24 @@ build-bench/benchmark/simd_compare_benchmark --benchmark_repetitions=5 \
 
 Google Benchmark's `tools/compare.py` can compare two such reports locally; it needs NumPy and SciPy.
 
+`simd_ab_benchmark.py` compares several such builds on one machine. Each round runs every build once in a rotated
+order, plus the OFF build a second time, so each SIMD/OFF ratio pairs a run with the OFF run of the same round and
+the second OFF run (A/A) shows the machine's own noise. It stops when a build reports another level, cuts any mode
+differently from OFF, or reports a benchmark error. It writes a Markdown table, with the median and range of each
+benchmark's per-round change in bold when every round lies outside the A/A range, and a JSON summary that keeps the
+per-round medians. Build every level with the same compiler and flags, ideally with `-falign-functions=64` so code
+placement adds no noise, and pin the script to one CPU where the platform allows:
+
+```sh
+taskset -c 2 python3 benchmark/simd_ab_benchmark.py \
+  --variant OFF=build-off/benchmark/simd_compare_benchmark \
+  --variant AVX2=build-avx2/benchmark/simd_compare_benchmark \
+  --dict dict/jieba.dict.utf8 --model dict/hmm_model.utf8 --text test/testdata/weicheng.utf8 \
+  --title "Linux x64 / GCC" --markdown simd.md --json simd.json
+```
+
+`python3 -B -m unittest discover -s benchmark -p 'simd_ab_benchmark_test.py'` runs its unit tests.
+
 `load_benchmark` first checks that snapshot and text loading cut and tag the corpus identically, then times
 each loading stage. `--rounds N` sets the rounds per case (default 9); each round is one load, reported as a
 Google Benchmark repetition, and each case shows the mean, median, spread, minimum and maximum. `--cold` evicts
