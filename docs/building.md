@@ -82,7 +82,7 @@ target_link_libraries(my_app PRIVATE neo_cppjieba::icu)
 | `OFF` | 任意 | 无 |
 | `SSE2` | x86-64 | 无，属于 x86-64 基线 |
 | `AVX2` | x86-64 | GCC / Clang 为 `-mavx2`，MSVC 为 `/arch:AVX2` |
-| `NEON` | AArch64，GCC 或 Clang | 无，属于 AArch64 基线 |
+| `NEON` | AArch64 | 无，属于 AArch64 基线 |
 
 配置时 CMake 带上所选选项试编译一段使用该指令集的代码，编译器或目标架构不支持时直接报错；
 取值不在表中、或 `CMAKE_OSX_ARCHITECTURES` 含多个架构时同样报错。只检查能否编译，不检查构建机的 CPU，交叉编译照常可用。
@@ -129,7 +129,9 @@ ctest --test-dir build-tests -C Debug --output-on-failure
 GoogleTest 按父项目目标、本地安装、源码下载的顺序查找；使用已有安装时设置 `GTest_DIR` 或 `CMAKE_PREFIX_PATH`。
 单元测试覆盖分词、编码、输出契约和容量变体，安装消费端测试检查包导出及可选组件。
 `CPPJIEBA_SIMD=OFF` 时，本机能执行的每个 SIMD 级别另有一个 `neo_simd_<级别>` 测试。
-CI 另以 SIMD 级别运行全部测试：Linux 为 `AVX2`（Debug、Release）和 `SSE2`（Release），Windows 为 `AVX2`，macOS 为 `NEON`。
+CI 另以 SIMD 级别运行全部测试：Linux x64 为 `AVX2`（Debug、Release）和 `SSE2`（Release），
+Linux ARM64 为 `NEON`（GCC，Debug、Release），Windows x64 为 `AVX2`，Windows ARM64 为 `NEON`（MSVC，Debug、Release），
+macOS 为 `NEON`（Release）。
 GCC 构建另有 `neo_inline_hot_paths`，检查逐字符热点函数在内联预算耗尽时仍被内联。
 启用 ICU 或 C API 后，CTest 增加相应的验证。性能测量命令见 [benchmark 指南](../benchmark/README.md)。
 

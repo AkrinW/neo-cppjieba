@@ -410,6 +410,8 @@ inline auto viterbi_forward(StateScores weights, std::span<const StateScores, 4>
 #elif defined(CPPJIEBA_SIMD_SSE2)
     return sse2::viterbi_forward(weights, transitions, floor, emit_at, path);
 #else
+    static_assert(level == SimdLevel::OFF || level == SimdLevel::NEON,
+                  "simd::viterbi_forward: a level with a vector kernel fell through to the scalar loop");
     return scalar::viterbi_forward(weights, transitions, floor, emit_at, path);
 #endif
 }
@@ -425,6 +427,8 @@ inline auto viterbi_forward_legal(StateScores weights, std::span<const StateScor
 #elif defined(CPPJIEBA_SIMD_SSE2)
     return sse2::viterbi_forward_legal(weights, transitions, emit_at, path);
 #else
+    static_assert(level == SimdLevel::OFF || level == SimdLevel::NEON,
+                  "simd::viterbi_forward_legal: a level with a vector kernel fell through to the scalar loop");
     return scalar::viterbi_forward_legal(weights, transitions, emit_at, path);
 #endif
 }

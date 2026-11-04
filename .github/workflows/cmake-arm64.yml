@@ -15,7 +15,7 @@ env:
 
 jobs:
   build-linux-arm64:
-    name: Linux ARM64 / ${{ matrix.build_type }}
+    name: Linux ARM64 / ${{ matrix.build_type }}${{ matrix.simd != 'OFF' && format(' / SIMD={0}', matrix.simd) || '' }}
     env:
       BUILD_TYPE: ${{ matrix.build_type }}
     runs-on: ubuntu-26.04-arm
@@ -24,6 +24,11 @@ jobs:
       matrix:
         cpp_version: [23]
         build_type: [Debug, Release]
+        simd: ["OFF"]
+        # The GCC NEON builds; macOS covers Clang and Windows ARM64 covers MSVC.
+        include:
+          - {cpp_version: 23, build_type: Debug, simd: NEON}
+          - {cpp_version: 23, build_type: Release, simd: NEON}
 
     steps:
       - name: Check out repository code
@@ -36,7 +41,7 @@ jobs:
         # Configure CMake in a 'build' subdirectory. `CMAKE_BUILD_TYPE` is only required if you are using a single-configuration generator such as make.
         # See https://cmake.org/cmake/help/latest/variable/CMAKE_BUILD_TYPE.html?highlight=cmake_build_type
         # run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
-        run: cmake -B ${{github.workspace}}/build -DBUILD_TESTING=ON -DCPPJIEBA_BUILD_C_API=OFF -DCPPJIEBA_BUILD_BENCHMARKS=OFF -DCMAKE_CXX_STANDARD=${{matrix.cpp_version}} -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
+        run: cmake -B ${{github.workspace}}/build -DBUILD_TESTING=ON -DCPPJIEBA_BUILD_C_API=OFF -DCPPJIEBA_BUILD_BENCHMARKS=OFF -DCMAKE_CXX_STANDARD=${{matrix.cpp_version}} -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DCPPJIEBA_SIMD=${{matrix.simd}}
 
       - name: Build
         # Build your program with the given configuration
@@ -53,7 +58,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: ut-linux-arm64-${{ matrix.build_type }}
+          name: ut-linux-arm64-${{ matrix.build_type }}-simd-${{ matrix.simd }}
           path: |
             build/unit-tests.xml
             build/Testing/Temporary/LastTest.log
