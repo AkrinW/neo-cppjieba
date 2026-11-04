@@ -138,7 +138,7 @@ auto run_viterbi(const Forward &forward, const StateScores &start, const std::ar
     const auto emit_at = [&](std::size_t x) {
         return emissions[x];
     };
-    const auto weights = forward(start, std::span{transitions}, cpp_floor, emit_at, std::span{path});
+    const auto weights = forward(start, std::span{transitions}, emit_at, std::span{path});
     auto bits = std::array<std::uint64_t, 4>{};
     for (auto y = std::size_t{0}; y < bits.size(); ++y) {
         bits[y] = std::bit_cast<std::uint64_t>(weights[y]);
@@ -146,12 +146,24 @@ auto run_viterbi(const Forward &forward, const StateScores &start, const std::ar
     return {.path = std::move(path), .weight_bits = bits};
 }
 
-// The backend this build selects, and the scalar reference every backend must match.
-constexpr auto active_forward = [](const auto &start, auto transitions, auto floor, const auto &emit_at, auto path) {
-    return viterbi_forward(start, transitions, floor, emit_at, path);
+// The CppJieba-rule backend this build selects with a given floor, and the scalar reference every backend must match.
+constexpr auto active_forward = [](ViterbiFloor<HMMState> floor) {
+    return [floor](const auto &start, auto transitions, const auto &emit_at, auto path) {
+        return viterbi_forward(start, transitions, floor, emit_at, path);
+    };
 };
-constexpr auto scalar_forward = [](const auto &start, auto transitions, auto floor, const auto &emit_at, auto path) {
-    return scalar::viterbi_forward(start, transitions, floor, emit_at, path);
+constexpr auto scalar_forward = [](ViterbiFloor<HMMState> floor) {
+    return [floor](const auto &start, auto transitions, const auto &emit_at, auto path) {
+        return scalar::viterbi_forward(start, transitions, floor, emit_at, path);
+    };
+};
+
+// The legal-predecessor backend this build selects, and its scalar reference.
+constexpr auto active_legal_forward = [](const auto &start, auto transitions, const auto &emit_at, auto path) {
+    return viterbi_forward_legal(start, transitions, emit_at, path);
+};
+constexpr auto scalar_legal_forward = [](const auto &start, auto transitions, const auto &emit_at, auto path) {
+    return scalar::viterbi_forward_legal(start, transitions, emit_at, path);
 };
 
 // Fill four scores from the shared pool.
@@ -161,24 +173,51 @@ auto random_scores(std::mt19937 &engine) -> StateScores {
             viterbi_scores[index_of(engine)]};
 }
 
+// The column-0 weights, transition rows and per-column emissions of one forward pass.
+struct ViterbiInput {
+    StateScores start;
+    std::array<StateScores, 4> transitions;
+    std::vector<StateScores> emissions;
+};
+
+// Draw a run of 1 to 24 columns from the score pool; about one column in five is a rune absent from the emission
+// table.
+auto random_input(std::mt19937 &engine) -> ViterbiInput {
+    auto length_of = std::uniform_int_distribution<std::size_t>{1, 24};
+    auto absent_of = std::uniform_int_distribution<int>{0, 4};
+    auto input = ViterbiInput{.start = random_scores(engine),
+                              .transitions = std::array{random_scores(engine), random_scores(engine),
+                                                        random_scores(engine), random_scores(engine)},
+                              .emissions = std::vector<StateScores>(length_of(engine))};
+    for (auto &column : input.emissions) {
+        column = absent_of(engine) == 0 ? StateScores{MIN_DOUBLE, MIN_DOUBLE, MIN_DOUBLE, MIN_DOUBLE}
+                                        : random_scores(engine);
+    }
+    return input;
+}
+
 } // namespace
 
 TEST(SimdTest, ViterbiAgreesWithScalarOnRandomColumns) {
     auto engine = std::mt19937{20261103};
-    auto length_of = std::uniform_int_distribution<std::size_t>{1, 24};
-    auto absent_of = std::uniform_int_distribution<int>{0, 4};
     for (auto trial = 0; trial < 2000; ++trial) {
-        const auto start = random_scores(engine);
-        const auto transitions =
-            std::array{random_scores(engine), random_scores(engine), random_scores(engine), random_scores(engine)};
-        auto emissions = std::vector<StateScores>(length_of(engine));
-        for (auto &column : emissions) {
-            // About one column in five is a rune absent from the emission table.
-            column = absent_of(engine) == 0 ? StateScores{MIN_DOUBLE, MIN_DOUBLE, MIN_DOUBLE, MIN_DOUBLE}
-                                            : random_scores(engine);
-        }
-        ASSERT_EQ(run_viterbi(active_forward, start, transitions, emissions),
-                  run_viterbi(scalar_forward, start, transitions, emissions))
+        const auto input = random_input(engine);
+        ASSERT_EQ(run_viterbi(active_forward(cpp_floor), input.start, input.transitions, input.emissions),
+                  run_viterbi(scalar_forward(cpp_floor), input.start, input.transitions, input.emissions))
+            << "trial " << trial;
+    }
+}
+
+TEST(SimdTest, ViterbiAgreesWithScalarForAnyFloor) {
+    auto engine = std::mt19937{20261104};
+    auto score_of = std::uniform_int_distribution<std::size_t>{0, viterbi_scores.size() - 1};
+    auto state_of = std::uniform_int_distribution<int>{0, 3};
+    for (auto trial = 0; trial < 2000; ++trial) {
+        const auto floor = ViterbiFloor<HMMState>{.score = viterbi_scores[score_of(engine)],
+                                                  .state = static_cast<HMMState>(state_of(engine))};
+        const auto input = random_input(engine);
+        ASSERT_EQ(run_viterbi(active_forward(floor), input.start, input.transitions, input.emissions),
+                  run_viterbi(scalar_forward(floor), input.start, input.transitions, input.emissions))
             << "trial " << trial;
     }
 }
@@ -186,7 +225,8 @@ TEST(SimdTest, ViterbiAgreesWithScalarOnRandomColumns) {
 TEST(SimdTest, ViterbiKeepsFloorStateWhenNoCandidateExceedsTheFloor) {
     const auto row = StateScores{-1.0, -2.0, -3.0, -4.0};
     const auto absent = StateScores{MIN_DOUBLE, MIN_DOUBLE, MIN_DOUBLE, MIN_DOUBLE};
-    const auto result = run_viterbi(active_forward, row, std::array{row, row, row, row}, {absent, absent, absent});
+    const auto result =
+        run_viterbi(active_forward(cpp_floor), row, std::array{row, row, row, row}, {absent, absent, absent});
     const auto floor_row = PathRow{HMMState::E, HMMState::E, HMMState::E, HMMState::E};
     EXPECT_EQ(result.path[1], floor_row);
     EXPECT_EQ(result.path[2], floor_row);
@@ -196,7 +236,7 @@ TEST(SimdTest, ViterbiKeepsFloorStateWhenNoCandidateExceedsTheFloor) {
 
 TEST(SimdTest, ViterbiTakesTheFirstPredecessorOnTies) {
     const auto row = StateScores{-1.0, -1.0, -1.0, -1.0};
-    const auto result = run_viterbi(active_forward, row, std::array{row, row, row, row}, {row, row});
+    const auto result = run_viterbi(active_forward(cpp_floor), row, std::array{row, row, row, row}, {row, row});
     EXPECT_EQ(result.path[1], (PathRow{HMMState::B, HMMState::B, HMMState::B, HMMState::B}));
 }
 
@@ -208,7 +248,7 @@ TEST(SimdTest, ViterbiKeepsTheEarlierScoreWhenSignedZerosTie) {
     const auto from_other = StateScores{-1.0, -1.0, -1.0, -1.0};
     const auto emit = StateScores{-0.0, -0.0, -0.0, -0.0};
     const auto result =
-        run_viterbi(active_forward, start, std::array{from_b, from_e, from_other, from_other}, {emit, emit});
+        run_viterbi(active_forward(cpp_floor), start, std::array{from_b, from_e, from_other, from_other}, {emit, emit});
     const auto negative_zero = std::bit_cast<std::uint64_t>(-0.0);
     EXPECT_EQ(result.path[1], (PathRow{HMMState::B, HMMState::B, HMMState::B, HMMState::B}));
     EXPECT_EQ(result.weight_bits, (std::array{negative_zero, negative_zero, negative_zero, negative_zero}));
@@ -217,8 +257,34 @@ TEST(SimdTest, ViterbiKeepsTheEarlierScoreWhenSignedZerosTie) {
 TEST(SimdTest, ViterbiOverOneColumnReturnsTheStartWeightsAndWritesNoRow) {
     const auto start = StateScores{-1.0, -0.0, 0.0, -2.0};
     const auto row = StateScores{-1.0, -1.0, -1.0, -1.0};
-    const auto result = run_viterbi(active_forward, start, std::array{row, row, row, row}, {row});
+    const auto result = run_viterbi(active_forward(cpp_floor), start, std::array{row, row, row, row}, {row});
     EXPECT_EQ(result.path[0], (PathRow{HMMState::S, HMMState::S, HMMState::S, HMMState::S}));
     EXPECT_EQ(result.weight_bits, (std::array{std::bit_cast<std::uint64_t>(-1.0), std::bit_cast<std::uint64_t>(-0.0),
                                               std::bit_cast<std::uint64_t>(0.0), std::bit_cast<std::uint64_t>(-2.0)}));
+}
+
+TEST(SimdTest, ViterbiLegalAgreesWithScalarOnRandomColumns) {
+    auto engine = std::mt19937{20261105};
+    for (auto trial = 0; trial < 2000; ++trial) {
+        const auto input = random_input(engine);
+        ASSERT_EQ(run_viterbi(active_legal_forward, input.start, input.transitions, input.emissions),
+                  run_viterbi(scalar_legal_forward, input.start, input.transitions, input.emissions))
+            << "trial " << trial;
+    }
+}
+
+TEST(SimdTest, ViterbiLegalTakesTheLaterPredecessorOnTies) {
+    const auto row = StateScores{-1.0, -1.0, -1.0, -1.0};
+    const auto result = run_viterbi(active_legal_forward, row, std::array{row, row, row, row}, {row, row});
+    EXPECT_EQ(result.path[1], (PathRow{HMMState::S, HMMState::M, HMMState::M, HMMState::S}));
+}
+
+// Earlier predecessors (E for B and S, B for E and M) score +0.0 and later ones -0.0; the later -0.0 is kept.
+TEST(SimdTest, ViterbiLegalKeepsTheLaterScoreWhenSignedZerosTie) {
+    const auto start = StateScores{0.0, 0.0, -0.0, -0.0};
+    const auto row = StateScores{-0.0, -0.0, -0.0, -0.0};
+    const auto result = run_viterbi(active_legal_forward, start, std::array{row, row, row, row}, {row, row});
+    const auto negative_zero = std::bit_cast<std::uint64_t>(-0.0);
+    EXPECT_EQ(result.path[1], (PathRow{HMMState::S, HMMState::M, HMMState::M, HMMState::S}));
+    EXPECT_EQ(result.weight_bits, (std::array{negative_zero, negative_zero, negative_zero, negative_zero}));
 }

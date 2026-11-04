@@ -13,7 +13,6 @@
 #include "neo/workspace/SegmentScratch.hpp"
 
 #include <array>
-#include <cassert>
 #include <cmath>
 #include <cstddef>
 #include <limits>
@@ -21,26 +20,6 @@
 #include <vector>
 
 namespace neo_cppjieba::detail {
-
-// A reference HMM transition retains the selected predecessor along with its score.
-struct HMMTransition {
-    double weight;
-    HMMState previous;
-};
-
-// Python and Rust consider only legal predecessors and select the higher state on a tie.
-[[nodiscard]]
-inline auto style_hmm_transition(const HMModel &model, const EmitProbabilities &weights, double emit,
-                                 HMMState state) noexcept -> HMMTransition {
-    assert(static_cast<size_t>(state) < kHMMStatesNum);
-    constexpr auto predecessors =
-        std::array{std::array{HMMState::E, HMMState::S}, std::array{HMMState::B, HMMState::M},
-                   std::array{HMMState::B, HMMState::M}, std::array{HMMState::E, HMMState::S}};
-    const auto states = predecessors[static_cast<size_t>(state)];
-    const auto first = weights[static_cast<size_t>(states[0])] + model.get_trans_prob(states[0], state) + emit;
-    const auto second = weights[static_cast<size_t>(states[1])] + model.get_trans_prob(states[1], state) + emit;
-    return first > second ? HMMTransition{first, states[0]} : HMMTransition{second, states[1]};
-}
 
 /// Run the Viterbi algorithm on runes[begin..end) and emit each word with global offset pos.
 template <WordEmitter Emit>
@@ -74,30 +53,19 @@ inline auto hmm_internal_cut(const HMModel &model, std::span<const Rune> runes, 
     path[0].fill(HMMState::B);
 
     // ── Recursion (t = 1 .. X-1) ────────────────────────────────────
+    const auto emit_at = [&](size_t x) {
+        return model.get_emit_probs(runes[to_index(begin + x)]);
+    };
+    const auto transitions = std::span{model.get_trans_probs()};
     if constexpr (compile_config::segmentation_style == SegmentationStyle::CPP) {
         // CppJieba floors scores at MIN_DOUBLE and defaults to the E predecessor. When every candidate
         // ties at the floor, as for runes absent from the emission table, this default decides the path.
-        const auto emit_at = [&](size_t x) {
-            return model.get_emit_probs(runes[to_index(begin + x)]);
-        };
-        previous_weight = simd::viterbi_forward(previous_weight, std::span{model.get_trans_probs()},
+        previous_weight = simd::viterbi_forward(previous_weight, transitions,
                                                 simd::ViterbiFloor<HMMState>{.score = MIN_DOUBLE, .state = HMMState::E},
                                                 emit_at, path);
     } else {
-        auto current_weight = std::array<double, Y>{};
-        for (auto x = size_t{1}; x < X; ++x) {
-            const auto emit_probs = model.get_emit_probs(runes[to_index(begin + x)]);
-            for (auto y = size_t{0}; y < Y; ++y) {
-                const auto transition =
-                    style_hmm_transition(model, previous_weight, emit_probs[y], static_cast<HMMState>(y));
-                assert_check(
-                    [&] { return static_cast<size_t>(transition.previous) < Y && std::isfinite(transition.weight); },
-                    "HMMSegment: Viterbi must select a valid predecessor");
-                current_weight[y] = transition.weight;
-                path[x][y] = transition.previous;
-            }
-            previous_weight = current_weight;
-        }
+        // Python and Rust consider only legal predecessors and select the higher state on a tie.
+        previous_weight = simd::viterbi_forward_legal(previous_weight, transitions, emit_at, path);
     }
 
     // ── Termination: pick the best final state (must be E or S) ─────
