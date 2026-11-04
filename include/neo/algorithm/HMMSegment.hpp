@@ -7,6 +7,7 @@
 #include "neo/resource/DictTrie.hpp"
 #include "neo/resource/HMMState.hpp"
 #include "neo/resource/HMModel.hpp"
+#include "neo/simd/SimdLevel.hpp"
 #include "neo/simd/Viterbi.hpp"
 #include "neo/util/Logging.hpp"
 #include "neo/value/Rune.hpp"
@@ -60,12 +61,12 @@ inline auto hmm_internal_cut(const HMModel &model, std::span<const Rune> runes, 
     if constexpr (compile_config::segmentation_style == SegmentationStyle::CPP) {
         // CppJieba floors scores at MIN_DOUBLE and defaults to the E predecessor. When every candidate
         // ties at the floor, as for runes absent from the emission table, this default decides the path.
-        previous_weight = simd::viterbi_forward(previous_weight, transitions,
-                                                simd::ViterbiFloor<HMMState>{.score = MIN_DOUBLE, .state = HMMState::E},
-                                                emit_at, path);
+        previous_weight = simd::viterbi_forward<simd::level>(
+            previous_weight, transitions, simd::ViterbiFloor<HMMState>{.score = MIN_DOUBLE, .state = HMMState::E},
+            emit_at, path);
     } else {
         // Python and Rust consider only legal predecessors and select the higher state on a tie.
-        previous_weight = simd::viterbi_forward_legal(previous_weight, transitions, emit_at, path);
+        previous_weight = simd::viterbi_forward_legal<simd::level>(previous_weight, transitions, emit_at, path);
     }
 
     // ── Termination: pick the best final state (must be E or S) ─────

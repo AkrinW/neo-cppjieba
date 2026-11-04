@@ -3,6 +3,7 @@
 #include "neo/resource/HMMState.hpp"
 #include "neo/resource/HMModel.hpp"
 #include "neo/simd/RuneMatch.hpp"
+#include "neo/simd/SimdLevel.hpp"
 #include "neo/simd/Viterbi.hpp"
 
 #include "FuzzUtils.hpp"
@@ -81,18 +82,20 @@ auto read_scores(ByteReader &reader) -> StateScores {
     return scores;
 }
 
-// The default-separator matches of a rune sequence from the active backend must equal the scalar reference.
+// The default-separator matches of a rune sequence from every compiled backend must equal the scalar reference.
 auto check_separators(ByteReader &reader) -> void {
     auto runes = std::vector<char32_t>{};
     while (!reader.empty() && runes.size() < max_runes) {
         runes.push_back(read_rune(reader));
     }
     const auto span = std::span<const char32_t>{runes};
-    auto active = std::vector<RuneIndex>{};
-    append_matches(span, DEFAULT_SEPARATORS, is_default_separator_unlikely, active);
     auto reference = std::vector<RuneIndex>{};
     scalar::append_matches(span, is_default_separator_unlikely, reference);
-    require(active == reference, "SIMD separator matches differ from the scalar reference");
+    for_each_compiled_backend([&]<SimdLevel Backend>() {
+        auto matches = std::vector<RuneIndex>{};
+        append_matches<Backend>(span, DEFAULT_SEPARATORS, is_default_separator_unlikely, matches);
+        require(matches == reference, "SIMD separator matches differ from the scalar reference");
+    });
 }
 
 // The column-0 weights, transition rows and per-column emissions of one forward pass.
@@ -137,40 +140,46 @@ auto run_viterbi(const Forward &forward, const ViterbiInput &input) -> ViterbiRe
     return result;
 }
 
-// The Python/Rust-rule backend the build selects, and its scalar reference.
-constexpr auto active_legal_forward = [](const auto &start, auto transitions, const auto &emit_at, auto path) {
-    return viterbi_forward_legal(start, transitions, emit_at, path);
-};
+// The Python/Rust-rule scalar reference.
 constexpr auto scalar_legal_forward = [](const auto &start, auto transitions, const auto &emit_at, auto path) {
     return scalar::viterbi_forward_legal(start, transitions, emit_at, path);
 };
 
-// The CppJieba-rule forward pass from the active backend must equal the scalar reference for any floor.
+// The CppJieba-rule forward pass from every compiled backend must equal the scalar reference for any floor.
 auto check_viterbi(ByteReader &reader) -> void {
     const auto floor_choice = reader.byte();
     const auto floor = ViterbiFloor<HMMState>{.score = score_pool[(floor_choice >> 2) % score_pool.size()],
                                               .state = static_cast<HMMState>(floor_choice & 3)};
     const auto input = read_viterbi_input(reader);
-    const auto active_forward = [&](const auto &start, auto transitions, const auto &emit_at, auto path) {
-        return viterbi_forward(start, transitions, floor, emit_at, path);
-    };
     const auto scalar_forward = [&](const auto &start, auto transitions, const auto &emit_at, auto path) {
         return scalar::viterbi_forward(start, transitions, floor, emit_at, path);
     };
-    require(run_viterbi(active_forward, input) == run_viterbi(scalar_forward, input),
-            "SIMD CppJieba Viterbi differs from the scalar reference");
+    const auto reference = run_viterbi(scalar_forward, input);
+    for_each_compiled_backend([&]<SimdLevel Backend>() {
+        const auto backend_forward = [&](const auto &start, auto transitions, const auto &emit_at, auto path) {
+            return viterbi_forward<Backend>(start, transitions, floor, emit_at, path);
+        };
+        require(run_viterbi(backend_forward, input) == reference,
+                "SIMD CppJieba Viterbi differs from the scalar reference");
+    });
 }
 
-// The Python/Rust-rule forward pass from the active backend must equal the scalar reference.
+// The Python/Rust-rule forward pass from every compiled backend must equal the scalar reference.
 auto check_legal_viterbi(ByteReader &reader) -> void {
     const auto input = read_viterbi_input(reader);
-    require(run_viterbi(active_legal_forward, input) == run_viterbi(scalar_legal_forward, input),
-            "SIMD Python/Rust Viterbi differs from the scalar reference");
+    const auto reference = run_viterbi(scalar_legal_forward, input);
+    for_each_compiled_backend([&]<SimdLevel Backend>() {
+        const auto backend_forward = [](const auto &start, auto transitions, const auto &emit_at, auto path) {
+            return viterbi_forward_legal<Backend>(start, transitions, emit_at, path);
+        };
+        require(run_viterbi(backend_forward, input) == reference,
+                "SIMD Python/Rust Viterbi differs from the scalar reference");
+    });
 }
 
 } // namespace
 
-// Each SIMD kernel the build selects must match its scalar reference bit for bit; OFF builds compare the scalar
+// Each SIMD kernel the build compiles must match its scalar reference bit for bit; OFF builds compare the scalar
 // dispatch with itself.
 extern "C" auto LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size) -> int {
     auto reader = ByteReader{data, size};

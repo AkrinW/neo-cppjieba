@@ -2,6 +2,7 @@
 
 #include "neo/Config.hpp"
 #include "neo/simd/RuneMatch.hpp"
+#include "neo/simd/SimdLevel.hpp"
 #include "neo/util/Logging.hpp"
 
 #include <array>
@@ -72,7 +73,7 @@ inline auto get_pre_filter_separators(std::span<const char32_t> runes, std::vect
     const auto is_separator = [](char32_t rune) noexcept {
         return is_default_separator_unlikely(rune);
     };
-    simd::append_matches(runes, DEFAULT_SEPARATORS, is_separator, out);
+    simd::append_matches<simd::level>(runes, DEFAULT_SEPARATORS, is_separator, out);
     // The end sentinel lets callers slice [previous + 1, next) without special-casing the last segment.
     out.push_back(n);
 }
