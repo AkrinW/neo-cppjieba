@@ -119,12 +119,16 @@ public:
 
         for (auto i = size_t{0}; i < entries.size(); ++i) {
             old::DecodeUTF8RunesInString(entries[i].word, rune_arrays_[i]);
+        }
+        shuffled_ = shuffled_indices(entries.size(), kShuffleSeed);
+        // Copy miss keys in their own pass so their heap blocks stay contiguous; interleaving them with the hit keys
+        // spread each miss scan over more pages and doubled its time.
+        for (auto i = size_t{0}; i < entries.size(); ++i) {
             miss_rune_arrays_[i] = rune_arrays_[i];
             if (!miss_rune_arrays_[i].empty()) {
                 miss_rune_arrays_[i][0].rune = 0x10FFFF;
             }
         }
-        shuffled_ = shuffled_indices(entries.size(), kShuffleSeed);
         trie_ = std::make_unique<old::Trie>(keys_, ptrs_);
     }
     OldTrieBench(const OldTrieBench &) = delete;
@@ -183,12 +187,15 @@ public:
             keys_[i] = neo::Utf::decode(entries[i].word);
             auto w = entries[i].freq > 0 ? static_cast<float>(std::log(entries[i].freq / freq_sum)) : -20.0f;
             values_[i] = {w, neo::PosTag(entries[i].tag)};
+        }
+        shuffled_ = shuffled_indices(entries.size(), kShuffleSeed);
+        // Copy miss keys in their own pass so their heap blocks stay contiguous, as in OldTrieBench.
+        for (auto i = size_t{0}; i < entries.size(); ++i) {
             miss_keys_[i] = keys_[i];
             if (!miss_keys_[i].empty()) {
                 miss_keys_[i][0] = 0x10FFFF;
             }
         }
-        shuffled_ = shuffled_indices(entries.size(), kShuffleSeed);
         trie_.build(keys_, values_);
     }
     NeoTrieBench(const NeoTrieBench &) = delete;

@@ -161,14 +161,18 @@ auto register_subrange_encode(const std::string &text, const Unicode &normal_dec
 }
 
 // ─── 4. Segmentation scenario ───────────────────────────────────────
-// Per-word encode cost: items_per_second counts the encoded words.
+// Per-word encode cost: items_per_second counts the encoded words. Both paths keep their rune and word buffers across
+// iterations, as a reused workspace would; freeing them every iteration let glibc trim and refault the heap top.
 auto register_segmentation(const std::string &text, const std::vector<WordRange> &ranges) -> void {
     // ─── Normal path: decode + encode(subspan) per word ─────────────────
     benchmark::RegisterBenchmark("Segmentation/normal", [&text, &ranges](benchmark::State &state) {
+        auto runes = Unicode{};
+        auto words = std::vector<std::string>{};
+        words.reserve(ranges.size());
         for (auto _ : state) {
-            auto runes = decode(text);
-            auto words = std::vector<std::string>{};
-            words.reserve(ranges.size());
+            // decode() is this call on a fresh buffer; no public entry point decodes into an existing Unicode.
+            decode_into_impl<OffsetMode::Omit>(as_code_units(text), runes);
+            words.clear();
             for (const auto &r : ranges) {
                 words.push_back(encode(std::span<const Rune>(runes.data() + r.begin, r.size())));
             }
@@ -178,10 +182,12 @@ auto register_segmentation(const std::string &text, const std::vector<WordRange>
     });
     // ─── Fast path: decode_with_source + encode_range per word ──────────
     benchmark::RegisterBenchmark("Segmentation/fast", [&text, &ranges](benchmark::State &state) {
+        auto ws = UnicodeWithOffset{};
+        auto words = std::vector<std::string>{};
+        words.reserve(ranges.size());
         for (auto _ : state) {
-            auto ws = decode_with_offset(text);
-            auto words = std::vector<std::string>{};
-            words.reserve(ranges.size());
+            decode_with_offset_into(text, ws);
+            words.clear();
             auto view = as_view(text);
             const auto &offsets = ws.get_offsets();
             for (const auto &r : ranges) {
