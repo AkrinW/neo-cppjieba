@@ -373,6 +373,82 @@ TEST(UnicodeTest, DecodeErrorReportsEncodingOffsetAndReason) {
     }
 }
 
+namespace {
+
+// An accepted fast decode must equal the full decoder's successful result; a declined one is always consistent.
+auto fast_decode_agrees(std::span<const char> input) -> bool {
+    const auto fast = decode_utf8_fast(input);
+    if (fast.code_units == 0) {
+        return true;
+    }
+    const auto full = decode_one_utf8(input);
+    return full.error == UnicodeDecodeError::None && full.rune == fast.rune && full.code_units == fast.code_units;
+}
+
+// The decoding error message of input, or an empty string when input decodes.
+auto decode_error_message(std::string_view input) -> std::string {
+    try {
+        (void)decode_with_offset(input);
+    } catch (const LogConfig::Exception &error) {
+        return error.what();
+    }
+    return {};
+}
+
+} // namespace
+
+// The fast path reads continuation bytes only after an E0–EF lead, so other leads need one sample each.
+TEST(UnicodeTest, Utf8FastPathAgreesWithFullDecoderWheneverItAccepts) {
+    for (auto first = 0; first < 256; ++first) {
+        const auto tails = (first & 0xF0) == 0xE0 ? 256 : 1;
+        for (auto second = 0; second < tails; ++second) {
+            for (auto third = 0; third < tails; ++third) {
+                const auto bytes = std::array{static_cast<char>(first), static_cast<char>(tails == 1 ? 0x80 : second),
+                                              static_cast<char>(tails == 1 ? 0x80 : third)};
+                ASSERT_TRUE(fast_decode_agrees(bytes)) << first << ' ' << second << ' ' << third;
+            }
+        }
+    }
+}
+
+TEST(UnicodeTest, Utf8FastPathAcceptsAsciiAndCommonThreeByteSequences) {
+    for (auto ascii = 0; ascii < 0x80; ++ascii) {
+        const auto bytes = std::array{static_cast<char>(ascii)};
+        ASSERT_EQ(decode_utf8_fast(std::span<const char>{bytes}).code_units, 1) << ascii;
+    }
+    for (auto first = 0xE1; first <= 0xEF; ++first) {
+        if (first == 0xED) {
+            continue; // surrogate range: left to the full decoder
+        }
+        for (auto second = 0x80; second <= 0xBF; ++second) {
+            for (auto third = 0x80; third <= 0xBF; ++third) {
+                const auto bytes =
+                    std::array{static_cast<char>(first), static_cast<char>(second), static_cast<char>(third)};
+                ASSERT_EQ(decode_utf8_fast(std::span<const char>{bytes}).code_units, 3) << first << ' ' << second;
+            }
+        }
+    }
+}
+
+// Overlong, surrogate, two- and four-byte, truncated and malformed sequences need the full decoder's checks.
+TEST(UnicodeTest, Utf8FastPathLeavesOtherSequencesToFullDecoder) {
+    const auto inputs =
+        std::array<std::string_view, 8>{"\xE0\xA0\x80",     "\xED\x9F\xBF", "\xED\xA0\x80", "\xC2\xA9",
+                                        "\xF0\x9F\x98\x80", "\xE4\xB8",     "\x80",         "\xE4\x41\xA0"};
+    for (const auto input : inputs) {
+        EXPECT_EQ(decode_utf8_fast(std::span<const char>{input}).code_units, 0) << input.size();
+    }
+}
+
+TEST(UnicodeTest, DecodeErrorAfterFastPathRunesKeepsOffsetAndReason) {
+    const auto invalid_lead = decode_error_message("中文\xFF");
+    EXPECT_NE(invalid_lead.find("code-unit offset 6"), std::string::npos) << invalid_lead;
+    EXPECT_NE(invalid_lead.find("invalid leading code unit"), std::string::npos) << invalid_lead;
+    const auto surrogate = decode_error_message("中\xED\xA0\x80");
+    EXPECT_NE(surrogate.find("code-unit offset 3"), std::string::npos) << surrogate;
+    EXPECT_NE(surrogate.find("surrogate code point"), std::string::npos) << surrogate;
+}
+
 TEST(UnicodeTest, DecodeOneRejectsEmptyInputButAcceptsNul) {
     EXPECT_THROW(decode_one(std::string_view{}), LogConfig::Exception);
     EXPECT_THROW(decode_one(std::u16string_view{}), LogConfig::Exception);

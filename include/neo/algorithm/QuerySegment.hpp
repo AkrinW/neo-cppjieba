@@ -60,8 +60,9 @@ private:
     }
 
     /// Check whether the dictionary contains the two- or three-rune word [begin, end) of the segment.
-    [[nodiscard]] static auto has_short_match(std::span<const detail::SearchSubwords> matches, RuneIndex begin,
-                                              RuneIndex end) noexcept -> bool {
+    [[nodiscard]]
+    static auto has_short_match(std::span<const detail::SearchSubwords> matches, RuneIndex begin,
+                                RuneIndex end) noexcept -> bool {
         assert(begin < end && end <= matches.size());
         const auto length = end - begin;
         assert(length == 2 || length == 3);

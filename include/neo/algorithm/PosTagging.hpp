@@ -23,7 +23,8 @@ namespace neo_cppjieba::detail {
 // CppJieba's rule for words without a dictionary tag. ASCII runes are counted only until they
 // reach half the word length, so a one-rune word is always "x" and an ASCII prefix decides the rest:
 // no ASCII is "x", ASCII digits only is "m", and any other ASCII is "eng".
-[[nodiscard]] constexpr auto untagged_word_tag(std::span<const Rune> word) noexcept -> PosTag {
+[[nodiscard]]
+constexpr auto untagged_word_tag(std::span<const Rune> word) noexcept -> PosTag {
     auto ascii = size_t{0};
     auto digits = size_t{0};
     for (auto i = size_t{0}; i < word.size() && ascii < word.size() / 2; ++i) {
@@ -41,7 +42,8 @@ namespace neo_cppjieba::detail {
 }
 
 // User dictionary words without a tag fall back to the untagged rule, as in CppJieba.
-[[nodiscard]] inline auto word_tag(const DictTrie &dict, std::span<const Rune> word) noexcept -> PosTag {
+[[nodiscard]]
+inline auto word_tag(const DictTrie &dict, std::span<const Rune> word) noexcept -> PosTag {
     const auto unit = dict.find(word);
     return unit.has_value() && !unit.tag.empty() ? unit.tag : untagged_word_tag(word);
 }

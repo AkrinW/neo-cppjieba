@@ -17,7 +17,8 @@ static_assert(std::endian::native == std::endian::little || std::endian::native 
 // Decode an unsigned integer stored little-endian at the front of bytes; callers check the length first.
 // Copying the bytes keeps unaligned reads well defined.
 template <std::unsigned_integral T>
-[[nodiscard]] auto load_le(std::span<const std::byte> bytes) noexcept -> T {
+[[nodiscard]]
+auto load_le(std::span<const std::byte> bytes) noexcept -> T {
     assert_check([&] { return bytes.size() >= sizeof(T); }, "ByteOrder: read past the end of a buffer");
     auto value = T{};
     std::memcpy(&value, bytes.data(), sizeof(T));

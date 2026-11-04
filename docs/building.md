@@ -73,6 +73,32 @@ target_link_libraries(my_app PRIVATE neo_cppjieba::icu)
 `CPPJIEBA_BUILD_C_API=ON` 增加共享库、静态库和纯 C 头文件。
 构建、链接与运行库选择集中在 [C ABI 指南](../api/README.md)。
 
+### SIMD
+
+`CPPJIEBA_SIMD` 选择向量化内核使用的指令集，默认 `OFF`，只用标量代码：
+
+| 取值 | 目标 | 追加的编译选项 |
+| --- | --- | --- |
+| `OFF` | 任意 | 无 |
+| `SSE2` | x86-64 | 无，属于 x86-64 基线 |
+| `AVX2` | x86-64 | GCC / Clang 为 `-mavx2`，MSVC 为 `/arch:AVX2` |
+| `NEON` | AArch64，GCC 或 Clang | 无，属于 AArch64 基线 |
+
+配置时 CMake 带上所选选项试编译一段使用该指令集的代码，编译器或目标架构不支持时直接报错；
+取值不在表中、或 `CMAKE_OSX_ARCHITECTURES` 含多个架构时同样报错。只检查能否编译，不检查构建机的 CPU，交叉编译照常可用。
+`CPPJIEBA_SIMD_<级别>` 宏和编译选项随 `neo_cppjieba::neo_cppjieba` 传给使用方，安装包保留构建时的级别。
+
+- 级别属于整个程序的配置：同一程序的所有翻译单元须使用相同级别，否则同名内联函数会有不同定义。
+- `AVX2` 的编译选项作用于使用方的整个目标，生成的程序只能在支持 AVX2 的 CPU 上运行，库不做运行时检测。
+  C ABI 库同样随所选级别编译，分发给他人的二进制宜保持 `OFF` 或基线级别。
+- 不经 CMake 集成时，自行定义 `CPPJIEBA_SIMD_SSE2`、`CPPJIEBA_SIMD_AVX2`、`CPPJIEBA_SIMD_NEON` 之一并加上对应编译选项；
+  宏与目标架构或编译选项不符时，`neo/simd/SimdLevel.hpp` 在编译期报错。
+- 按级别切换实现的内核有分隔符扫描和 HMM Viterbi（CPP 与 Python/Rust 两种规则各一个）：`SSE2` 和 `AVX2`
+  各有向量版本，`NEON` 暂用标量；其余各项见 [ROADMAP](../ROADMAP.md#分词吞吐simd)。2026-11 在 i5-12500 上，
+  分隔符扫描让各模式快约 3%–4%，但 `-mavx2` 本身让其余代码慢约 1.5%–2%；CPP 规则的 Viterbi 内核另让 MIX 和
+  SEARCH 在 `AVX2` 下快约 3%–4%、`SSE2` 下快约 1%–2%，HMM 模式快约 15%–24%；Python/Rust 规则的内核让 HMM 模式
+  快约 24%–28%，MIX 快约 1%–2%。合计起来，MIX 上两级相当，SEARCH 和 HMM 模式 `AVX2` 更快。
+
 ## 构建选项
 
 | 选项 | 默认值 | 作用 |
@@ -83,6 +109,7 @@ target_link_libraries(my_app PRIVATE neo_cppjieba::icu)
 | `CPPJIEBA_BUILD_BENCHMARKS` | OFF | 构建独立性能程序 |
 | `CPPJIEBA_BUILD_RUST_BENCHMARKS` | OFF | 增加 Rust 比较，要求 benchmark 和 Cargo |
 | `CPPJIEBA_ENABLE_ICU` | OFF | 增加 ICU 编码转换目标及测试 |
+| `CPPJIEBA_SIMD` | OFF | 向量化内核的指令集：`OFF`、`SSE2`、`AVX2`、`NEON`，见 [SIMD](#simd) |
 | `CPPJIEBA_BUILD_C_API` | OFF | 构建 C ABI 库 |
 | `CPPJIEBA_C_API_BUILD_SHARED` | ON | 启用 C API 后构建共享库 |
 | `CPPJIEBA_C_API_BUILD_STATIC` | ON | 启用 C API 后构建静态库 |
@@ -101,6 +128,9 @@ ctest --test-dir build-tests -C Debug --output-on-failure
 
 GoogleTest 按父项目目标、本地安装、源码下载的顺序查找；使用已有安装时设置 `GTest_DIR` 或 `CMAKE_PREFIX_PATH`。
 单元测试覆盖分词、编码、输出契约和容量变体，安装消费端测试检查包导出及可选组件。
+`CPPJIEBA_SIMD=OFF` 时，本机能执行的每个 SIMD 级别另有一个 `neo_simd_<级别>` 测试。
+CI 另以 SIMD 级别运行全部测试：Linux 为 `AVX2`（Debug、Release）和 `SSE2`（Release），Windows 为 `AVX2`，macOS 为 `NEON`。
+GCC 构建另有 `neo_inline_hot_paths`，检查逐字符热点函数在内联预算耗尽时仍被内联。
 启用 ICU 或 C API 后，CTest 增加相应的验证。性能测量命令见 [benchmark 指南](../benchmark/README.md)。
 
 ## 质量检查
@@ -148,6 +178,8 @@ LLVM 23 来自 apt.llvm.org，软件源由 `tools/add-llvm-apt-source.sh` 添加
 - Quality 工作流对每个目标 fuzz 30 秒，从缓存的语料出发；PR 只读取缓存，master 的推送精简后保存。
   [Nightly fuzz 工作流](../.github/workflows/fuzz-nightly.yml)每天为每个目标开一个任务，以 4 个进程 fuzz 10 分钟，
   再把各目标精简后的语料合并存入同一缓存；手动触发时可指定每个目标的秒数。
+- Quality 工作流另以 `CPPJIEBA_SIMD=AVX2` 构建并 fuzz 全部目标，只读取语料缓存。`simd_kernels` 把构建所选的分隔符扫描和
+  两种 Viterbi 内核与标量参考逐位比较，`OFF` 构建中二者是同一实现；nightly 任务因此以 `AVX2` 构建这个目标。
 - 覆盖率脚本把 `summary.md` 写入输出目录，CI 将它发布为 job summary：总计、各目录和覆盖最少的文件按行和分支统计，
   任一测试程序或模板实例到达即算覆盖。llvm-cov 把返回语句之后不可达的块尾（如 `case` 末尾的 `}`）记为 0，
   因此只含右花括号的行在其前一可执行行被覆盖时计为覆盖。设置 `COVERAGE_BASE=<修订>` 时另列相对该修订改动行的覆盖，
@@ -163,7 +195,7 @@ LLVM 23 来自 apt.llvm.org，软件源由 `tools/add-llvm-apt-source.sh` 添加
 | `deps/` | 测试、比较依赖的配置及子模块 |
 | `dict/`、`examples/` | 词典模型、可运行示例 |
 | `test/` | 单元测试、fuzz 目标、消费端测试、测试数据和 CMake 验证脚本 |
-| `benchmark/`、`docs/benchmarks/` | 测量程序、报告生成工具及已发布的数据快照 |
+| `benchmark/`、`docs/benchmarks/` | 测量程序、报告生成工具及已发布的数据快照；`benchmark/third_party/` 为随附的第三方头文件 |
 | `tools/` | 格式化、静态分析、fuzz 和覆盖率脚本 |
 
 `build*/`、`cmake-build-*/`、`install/` 和 `benchmark/results/` 用于生成输出及本地测量记录。

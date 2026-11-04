@@ -7,12 +7,12 @@
 #include "neo/resource/DictTrie.hpp"
 #include "neo/resource/HMMState.hpp"
 #include "neo/resource/HMModel.hpp"
+#include "neo/simd/Viterbi.hpp"
 #include "neo/util/Logging.hpp"
 #include "neo/value/Rune.hpp"
 #include "neo/workspace/SegmentScratch.hpp"
 
 #include <array>
-#include <cassert>
 #include <cmath>
 #include <cstddef>
 #include <limits>
@@ -20,25 +20,6 @@
 #include <vector>
 
 namespace neo_cppjieba::detail {
-
-// A reference HMM transition retains the selected predecessor along with its score.
-struct HMMTransition {
-    double weight;
-    HMMState previous;
-};
-
-// Python and Rust consider only legal predecessors and select the higher state on a tie.
-[[nodiscard]] inline auto style_hmm_transition(const HMModel &model, const EmitProbabilities &weights, double emit,
-                                               HMMState state) noexcept -> HMMTransition {
-    assert(static_cast<size_t>(state) < kHMMStatesNum);
-    constexpr auto predecessors =
-        std::array{std::array{HMMState::E, HMMState::S}, std::array{HMMState::B, HMMState::M},
-                   std::array{HMMState::B, HMMState::M}, std::array{HMMState::E, HMMState::S}};
-    const auto states = predecessors[static_cast<size_t>(state)];
-    const auto first = weights[static_cast<size_t>(states[0])] + model.get_trans_prob(states[0], state) + emit;
-    const auto second = weights[static_cast<size_t>(states[1])] + model.get_trans_prob(states[1], state) + emit;
-    return first > second ? HMMTransition{first, states[0]} : HMMTransition{second, states[1]};
-}
 
 /// Run the Viterbi algorithm on runes[begin..end) and emit each word with global offset pos.
 template <WordEmitter Emit>
@@ -56,7 +37,6 @@ inline auto hmm_internal_cut(const HMModel &model, std::span<const Rune> runes, 
 
     // Scores need only the previous and current columns; paths keep one contiguous [position][state] row each.
     auto previous_weight = std::array<double, Y>{};
-    auto current_weight = std::array<double, Y>{};
     // Every active row is overwritten before backtrace; retain the high-water size between HMM runs.
     if (scratch.hmm_path.size() < X) {
         scratch.hmm_path.resize(X);
@@ -73,37 +53,19 @@ inline auto hmm_internal_cut(const HMModel &model, std::span<const Rune> runes, 
     path[0].fill(HMMState::B);
 
     // ── Recursion (t = 1 .. X-1) ────────────────────────────────────
-    for (auto x = size_t{1}; x < X; ++x) {
-        const auto emit_probs = model.get_emit_probs(runes[to_index(begin + x)]);
-        for (auto y = size_t{0}; y < Y; ++y) {
-            const auto emit = emit_probs[y];
-            // CppJieba floors scores at MIN_DOUBLE and defaults to the E predecessor. When every candidate
-            // ties at the floor, as for runes absent from the emission table, this default decides the path.
-            auto best_weight = MIN_DOUBLE;
-            auto best_prev = HMMState::E;
-
-            if constexpr (compile_config::segmentation_style == SegmentationStyle::CPP) {
-                for (auto prev_y = size_t{0}; prev_y < Y; ++prev_y) {
-                    auto w = previous_weight[prev_y]
-                             + model.get_trans_prob(static_cast<HMMState>(prev_y), static_cast<HMMState>(y)) + emit;
-                    assert_check([&] { return std::isfinite(w); }, "HMMSegment: non-finite accumulated weight");
-                    if (w > best_weight) {
-                        best_weight = w;
-                        best_prev = static_cast<HMMState>(prev_y);
-                    }
-                }
-            } else {
-                const auto transition = style_hmm_transition(model, previous_weight, emit, static_cast<HMMState>(y));
-                best_weight = transition.weight;
-                best_prev = transition.previous;
-            }
-
-            assert_check([&] { return static_cast<size_t>(best_prev) < Y && std::isfinite(best_weight); },
-                         "HMMSegment: Viterbi must select a valid predecessor");
-            current_weight[y] = best_weight;
-            path[x][y] = best_prev;
-        }
-        previous_weight = current_weight;
+    const auto emit_at = [&](size_t x) {
+        return model.get_emit_probs(runes[to_index(begin + x)]);
+    };
+    const auto transitions = std::span{model.get_trans_probs()};
+    if constexpr (compile_config::segmentation_style == SegmentationStyle::CPP) {
+        // CppJieba floors scores at MIN_DOUBLE and defaults to the E predecessor. When every candidate
+        // ties at the floor, as for runes absent from the emission table, this default decides the path.
+        previous_weight = simd::viterbi_forward(previous_weight, transitions,
+                                                simd::ViterbiFloor<HMMState>{.score = MIN_DOUBLE, .state = HMMState::E},
+                                                emit_at, path);
+    } else {
+        // Python and Rust consider only legal predecessors and select the higher state on a tie.
+        previous_weight = simd::viterbi_forward_legal(previous_weight, transitions, emit_at, path);
     }
 
     // ── Termination: pick the best final state (must be E or S) ─────
@@ -152,7 +114,8 @@ inline auto hmm_internal_cut(const HMModel &model, std::span<const Rune> runes, 
 
 /// Find the end position of a consecutive ASCII letter sequence starting at `begin`.
 /// Returns `begin` if runes[begin] is not a letter.
-[[nodiscard]] constexpr auto sequential_letter_end(std::span<const Rune> runes, RuneIndex begin, RuneIndex end) noexcept
+[[nodiscard]]
+constexpr auto sequential_letter_end(std::span<const Rune> runes, RuneIndex begin, RuneIndex end) noexcept
     -> RuneIndex {
     assert_check([&] { return begin < end && end <= runes.size(); }, "HMMSegment: invalid ASCII letter range");
     auto r = runes[to_index(begin)];
@@ -173,8 +136,8 @@ inline auto hmm_internal_cut(const HMModel &model, std::span<const Rune> runes, 
 
 /// Find the end position of a consecutive number sequence starting at `begin`.
 /// Returns `begin` if runes[begin] is not a digit.
-[[nodiscard]] constexpr auto number_end(std::span<const Rune> runes, RuneIndex begin, RuneIndex end) noexcept
-    -> RuneIndex {
+[[nodiscard]]
+constexpr auto number_end(std::span<const Rune> runes, RuneIndex begin, RuneIndex end) noexcept -> RuneIndex {
     assert_check([&] { return begin < end && end <= runes.size(); }, "HMMSegment: invalid ASCII number range");
     auto r = runes[to_index(begin)];
     if ('0' > r || r > '9') {

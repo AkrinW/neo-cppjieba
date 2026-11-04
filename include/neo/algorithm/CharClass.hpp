@@ -12,27 +12,32 @@
 namespace neo_cppjieba::detail {
 
 // Locale-independent ASCII classes shared by the reference segmentation rules.
-[[nodiscard]] constexpr auto is_ascii_letter(Rune rune) noexcept -> bool {
+[[nodiscard]]
+constexpr auto is_ascii_letter(Rune rune) noexcept -> bool {
     return (rune >= U'a' && rune <= U'z') || (rune >= U'A' && rune <= U'Z');
 }
 
 // Only ASCII digits participate in MP's alphanumeric joining.
-[[nodiscard]] constexpr auto is_ascii_digit(Rune rune) noexcept -> bool {
+[[nodiscard]]
+constexpr auto is_ascii_digit(Rune rune) noexcept -> bool {
     return rune >= U'0' && rune <= U'9';
 }
 
 // Both reference implementations merge consecutive ASCII alphanumeric singletons.
-[[nodiscard]] constexpr auto is_ascii_alphanumeric(Rune rune) noexcept -> bool {
+[[nodiscard]]
+constexpr auto is_ascii_alphanumeric(Rune rune) noexcept -> bool {
     return is_ascii_letter(rune) || is_ascii_digit(rune);
 }
 
 // Python finalseg and jieba-rs use this narrower range for HMM input.
-[[nodiscard]] constexpr auto is_hmm_han(Rune rune) noexcept -> bool {
+[[nodiscard]]
+constexpr auto is_hmm_han(Rune rune) noexcept -> bool {
     return rune >= 0x4E00 && rune <= 0x9FD5;
 }
 
 // jieba-rs 0.11.0 includes these CJK extensions in dictionary blocks.
-[[nodiscard]] constexpr auto is_rust_cjk(Rune rune) noexcept -> bool {
+[[nodiscard]]
+constexpr auto is_rust_cjk(Rune rune) noexcept -> bool {
     return (rune >= 0x4E00 && rune <= 0x9FFF) || (rune >= 0x3400 && rune <= 0x4DBF)
            || (rune >= 0xF900 && rune <= 0xFAFF) || (rune >= 0x20000 && rune <= 0x2A6DF)
            || (rune >= 0x2A700 && rune <= 0x2B73F) || (rune >= 0x2B740 && rune <= 0x2B81F)
@@ -41,7 +46,8 @@ namespace neo_cppjieba::detail {
 }
 
 // The precise/search dictionary block also accepts the reference ASCII punctuation set.
-[[nodiscard]] constexpr auto is_style_dictionary_rune(Rune rune) noexcept -> bool {
+[[nodiscard]]
+constexpr auto is_style_dictionary_rune(Rune rune) noexcept -> bool {
     const auto han = [rune] {
         if constexpr (compile_config::segmentation_style == SegmentationStyle::RUST) {
             return is_rust_cjk(rune);
@@ -54,14 +60,16 @@ namespace neo_cppjieba::detail {
 }
 
 // Python's Unicode whitespace class includes the ASCII information separators.
-[[nodiscard]] constexpr auto is_python_space(Rune rune) noexcept -> bool {
+[[nodiscard]]
+constexpr auto is_python_space(Rune rune) noexcept -> bool {
     return (rune >= 0x09 && rune <= 0x0D) || (rune >= 0x1C && rune <= 0x20) || rune == 0x85 || rune == 0xA0
            || rune == 0x1680 || (rune >= 0x2000 && rune <= 0x200A) || rune == 0x2028 || rune == 0x2029 || rune == 0x202F
            || rune == 0x205F || rune == 0x3000;
 }
 
 // Decimal digit blocks from Unicode 16.0, as used by the benchmark's Python 3.14.
-[[nodiscard]] constexpr auto is_python_decimal(Rune rune) noexcept -> bool {
+[[nodiscard]]
+constexpr auto is_python_decimal(Rune rune) noexcept -> bool {
     if (is_ascii_digit(rune)) {
         return true;
     }
@@ -80,12 +88,14 @@ namespace neo_cppjieba::detail {
 }
 
 // Rust's HMM and search paths recognize connectors inside alphanumeric compounds.
-[[nodiscard]] constexpr auto is_rust_connector(Rune rune) noexcept -> bool {
+[[nodiscard]]
+constexpr auto is_rust_connector(Rune rune) noexcept -> bool {
     return rune == U'.' || rune == U'_' || rune == U'-';
 }
 
 // Match the non-Chinese HMM token starting at an ASCII alphanumeric rune.
-[[nodiscard]] inline auto style_hmm_ascii_end(std::span<const Rune> runes, RuneIndex begin) noexcept -> RuneIndex {
+[[nodiscard]]
+inline auto style_hmm_ascii_end(std::span<const Rune> runes, RuneIndex begin) noexcept -> RuneIndex {
     assert(begin < runes.size() && is_ascii_alphanumeric(runes[to_index(begin)]));
     auto end = begin;
     while (end < runes.size() && is_ascii_alphanumeric(runes[to_index(end)])) {

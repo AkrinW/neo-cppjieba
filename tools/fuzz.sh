@@ -5,8 +5,8 @@ set -euo pipefail
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 REPO_ROOT=$(cd -- "${SCRIPT_DIR}/.." && pwd)
 
-readonly FUZZERS=(utf_decode main_dict user_dict hmm_model dict_snapshot snapshot_roundtrip keyword utf_cut c_api_cut
-    c_api_ranges c_api_sources c_api_edit c_api_keyword)
+readonly FUZZERS=(utf_decode main_dict user_dict hmm_model dict_snapshot snapshot_roundtrip keyword utf_cut simd_kernels
+    c_api_cut c_api_ranges c_api_sources c_api_edit c_api_keyword)
 readonly FUZZ_SECONDS_DEFAULT=60
 
 usage() {
@@ -22,6 +22,7 @@ dictionary_for() {
         main_dict | user_dict | snapshot_roundtrip | keyword | c_api_sources) echo dictionary ;;
         hmm_model) echo hmm_model ;;
         dict_snapshot) echo dict_snapshot ;;
+        simd_kernels) echo simd_kernels ;;
         *) echo text ;;
     esac
 }
@@ -56,6 +57,13 @@ write_seeds() {
         printf '\000\005\005\012\002\000%s' "${line}" > "${corpus}/c_api_keyword/line${index}"
         index=$((index + 1))
     done < "${REPO_ROOT}/test/testdata/testlines.utf8"
+
+    # simd_kernels reads the kernel from the first byte: 0 separators, 1 CppJieba Viterbi, 2 Python/Rust Viterbi.
+    local kernel
+    for kernel in 0 1 2; do
+        { printf "\\$(printf '%03o' "${kernel}")"; head -c 512 "${REPO_ROOT}/test/testdata/testlines.utf8"; } \
+            > "${corpus}/simd_kernels/testlines_kernel${kernel}"
+    done
 
     # c_api_sources reads a flag byte: 0 loads dictionaries split at 0xFF bytes, 1 loads a snapshot.
     local testdata="${REPO_ROOT}/test/testdata" user_dict

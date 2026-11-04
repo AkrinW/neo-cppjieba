@@ -46,7 +46,8 @@ protected:
         }
     }
 
-    [[nodiscard]] auto dictionary_path() const -> std::string {
+    [[nodiscard]]
+    auto dictionary_path() const -> std::string {
         return path_to_utf8(directory_ / "main.dict");
     }
 

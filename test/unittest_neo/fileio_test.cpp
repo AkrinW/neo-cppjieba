@@ -308,7 +308,8 @@ protected:
         }
     }
 
-    [[nodiscard]] auto file_path(std::string_view name) const -> std::string {
+    [[nodiscard]]
+    auto file_path(std::string_view name) const -> std::string {
         return path_to_utf8(directory_ / name);
     }
 
@@ -594,7 +595,8 @@ TEST(FileIOIntegrationTest, ParseDictLines) {
 
         auto field_count = size_t{0};
         auto split = get_split_view(line, ' ');
-        for ([[maybe_unused]] auto &&field : split) {
+        for ([[maybe_unused]]
+             auto &&field : split) {
             ++field_count;
         }
         if (field_count == 3) {
@@ -662,11 +664,13 @@ protected:
         }
     }
 
-    [[nodiscard]] auto file_path(std::string_view name) const -> std::string {
+    [[nodiscard]]
+    auto file_path(std::string_view name) const -> std::string {
         return path_to_utf8(directory_ / name);
     }
 
-    [[nodiscard]] auto entries() const -> std::vector<std::string> {
+    [[nodiscard]]
+    auto entries() const -> std::vector<std::string> {
         auto names = std::vector<std::string>{};
         for (const auto &entry : std::filesystem::directory_iterator{directory_}) {
             names.push_back(path_to_utf8(entry.path().filename()));

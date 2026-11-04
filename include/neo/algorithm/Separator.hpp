@@ -1,6 +1,7 @@
 #pragma once
 
 #include "neo/Config.hpp"
+#include "neo/simd/RuneMatch.hpp"
 #include "neo/util/Logging.hpp"
 
 #include <array>
@@ -24,7 +25,8 @@ inline constexpr auto DEFAULT_SEPARATORS = std::array<char32_t, 5>{
 
 // is_default_separator checks whether a rune is one of the DEFAULT_SEPARATORS
 // using a simple linear scan — optimal for a set this small (5 elements).
-[[nodiscard]] constexpr auto is_default_separator(char32_t r) noexcept -> bool {
+[[nodiscard]]
+constexpr auto is_default_separator(char32_t r) noexcept -> bool {
     for (auto &&s : DEFAULT_SEPARATORS) {
         if (s == r) {
             return true;
@@ -35,7 +37,8 @@ inline constexpr auto DEFAULT_SEPARATORS = std::array<char32_t, 5>{
 
 // is_default_separator_unlikely is a variant of is_default_separator that hints to the compiler that the condition is
 // unlikely to be true.
-[[nodiscard]] constexpr auto is_default_separator_unlikely(char32_t r) noexcept -> bool {
+[[nodiscard]]
+constexpr auto is_default_separator_unlikely(char32_t r) noexcept -> bool {
     if (r <= 32) [[unlikely]] {
         // Bits set for tab(9), newline(10), space(32).
         constexpr auto bitmask = uint64_t{(1ULL << 9) | (1ULL << 10) | (1ULL << 32)};
@@ -46,7 +49,8 @@ inline constexpr auto DEFAULT_SEPARATORS = std::array<char32_t, 5>{
 
 // is_default_separator_branchless is a branchless variant of is_default_separator.
 // It avoids if/else so the compiler can auto-vectorize loops that call it.
-[[nodiscard]] constexpr auto is_default_separator_branchless(char32_t r) noexcept -> bool {
+[[nodiscard]]
+constexpr auto is_default_separator_branchless(char32_t r) noexcept -> bool {
     // low-range: tab(9), newline(10), space(32) — use bitmask
     auto low = (r <= 32) & (((uint64_t{(1ULL << 9) | (1ULL << 10) | (1ULL << 32)} >> (r & 63)) & 1) != 0);
     // high-range: 。(0x3002) or ，(0xFF0C)
@@ -63,11 +67,12 @@ inline auto get_pre_filter_separators(std::span<const char32_t> runes, std::vect
     auto n = static_cast<RuneIndex>(runes.size());
     out.clear();
     out.reserve(to_index(n / 8)); // heuristic: ~12.5% separators
-    for (auto i = RuneIndex{0}; i < n; ++i) {
-        if (is_default_separator_unlikely(runes[to_index(i)])) {
-            out.push_back(i);
-        }
-    }
+    // A lambda keeps the per-rune predicate a direct call that the early inliner removes; a function reference
+    // stays an indirect call until the translation-unit budget allows inlining append_matches.
+    const auto is_separator = [](char32_t rune) noexcept {
+        return is_default_separator_unlikely(rune);
+    };
+    simd::append_matches(runes, DEFAULT_SEPARATORS, is_separator, out);
     // The end sentinel lets callers slice [previous + 1, next) without special-casing the last segment.
     out.push_back(n);
 }

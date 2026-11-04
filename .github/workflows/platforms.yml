@@ -11,13 +11,20 @@ permissions:
 
 jobs:
   build:
-    name: ${{ matrix.os }} / ${{ matrix.build_type }}
+    name: ${{ matrix.os }} / ${{ matrix.build_type }}${{ matrix.simd != 'OFF' && format(' / SIMD={0}', matrix.simd) || '' }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [macos-26, windows-2025-vs2026]
         build_type: [Debug, Release]
+        simd: ["OFF"]
+        # MSVC compiles the x86 kernels only here (AVX2 builds include the SSE2 backend); macOS runners are arm64,
+        # where NEON builds the scalar fallbacks until NEON kernels exist.
+        include:
+          - {os: windows-2025-vs2026, build_type: Debug, simd: AVX2}
+          - {os: windows-2025-vs2026, build_type: Release, simd: AVX2}
+          - {os: macos-26, build_type: Release, simd: NEON}
 
     steps:
       - uses: actions/checkout@v7
@@ -39,13 +46,15 @@ jobs:
             -DCMAKE_CXX_FLAGS="-stdlib=libc++" \
             -DCMAKE_EXE_LINKER_FLAGS="-L$llvm_prefix/lib/c++ -L$llvm_prefix/lib/unwind -lunwind -Wl,-rpath,$llvm_prefix/lib/c++ -Wl,-rpath,$llvm_prefix/lib/unwind" \
             -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
-            -DBUILD_TESTING=ON -DCPPJIEBA_BUILD_C_API=OFF -DCPPJIEBA_BUILD_EXAMPLES=ON -DCPPJIEBA_BUILD_BENCHMARKS=ON
+            -DBUILD_TESTING=ON -DCPPJIEBA_BUILD_C_API=OFF -DCPPJIEBA_BUILD_EXAMPLES=ON -DCPPJIEBA_BUILD_BENCHMARKS=ON \
+            -DCPPJIEBA_SIMD=${{ matrix.simd }}
 
       - name: Configure Windows
         if: runner.os == 'Windows'
         run: >-
           cmake -S . -B build -G "Visual Studio 18 2026" -A x64
           -DBUILD_TESTING=ON -DCPPJIEBA_BUILD_C_API=OFF -DCPPJIEBA_BUILD_EXAMPLES=ON -DCPPJIEBA_BUILD_BENCHMARKS=ON
+          -DCPPJIEBA_SIMD=${{ matrix.simd }}
 
       - name: Build library users, tests and benchmarks
         run: cmake --build build --config ${{ matrix.build_type }} --parallel 3
@@ -59,7 +68,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: ut-${{ matrix.os }}-${{ matrix.build_type }}
+          name: ut-${{ matrix.os }}-${{ matrix.build_type }}-simd-${{ matrix.simd }}
           path: |
             build/unit-tests.xml
             build/Testing/Temporary/LastTest.log

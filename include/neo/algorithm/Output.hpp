@@ -17,8 +17,8 @@
 namespace neo_cppjieba::detail {
 
 // The offset sentinel maps the exclusive rune end to the corresponding source boundary.
-[[nodiscard]] inline auto to_source_range(WordRange range, std::span<const SourceOffset> offsets) noexcept
-    -> SourceRange {
+[[nodiscard]]
+inline auto to_source_range(WordRange range, std::span<const SourceOffset> offsets) noexcept -> SourceRange {
     assert_check([&] { return range.begin <= range.end && range.end < offsets.size(); },
                  "Jieba rune range exceeds its source offset table");
     return {offsets[to_index(range.begin)], offsets[to_index(range.end)]};

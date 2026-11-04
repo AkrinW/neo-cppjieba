@@ -20,7 +20,7 @@ env:
 
 jobs:
   build:
-    name: Linux x64 / ${{ matrix.build_type }} / legacy=${{ matrix.legacy_tests }}
+    name: Linux x64 / ${{ matrix.build_type }} / legacy=${{ matrix.legacy_tests }}${{ matrix.simd != 'OFF' && format(' / SIMD={0}', matrix.simd) || '' }}
     env:
       BUILD_TYPE: ${{ matrix.build_type }}
     runs-on: ${{ matrix.os }}
@@ -31,6 +31,13 @@ jobs:
         cpp_version: [23]
         legacy_tests: ["OFF", "ON"]
         build_type: [Debug, Release]
+        simd: ["OFF"]
+        # The whole suite at each x86 SIMD level; OFF jobs already run the SIMD unit tests at every level the runner
+        # supports, but only these jobs segment and extract keywords through the vector kernels end to end.
+        include:
+          - {os: ubuntu-26.04, cpp_version: 23, legacy_tests: "OFF", build_type: Debug, simd: AVX2}
+          - {os: ubuntu-26.04, cpp_version: 23, legacy_tests: "OFF", build_type: Release, simd: AVX2}
+          - {os: ubuntu-26.04, cpp_version: 23, legacy_tests: "OFF", build_type: Release, simd: SSE2}
 
     steps:
       - name: Check out repository code
@@ -44,7 +51,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y g++-16
 
       - name: Configure CMake
-        run: cmake -B ${{github.workspace}}/build -DBUILD_TESTING=ON -DCPPJIEBA_BUILD_C_API=OFF -DCPPJIEBA_BUILD_LEGACY_TESTS=${{matrix.legacy_tests}} -DCPPJIEBA_BUILD_BENCHMARKS=OFF -DCMAKE_CXX_STANDARD=${{matrix.cpp_version}} -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
+        run: cmake -B ${{github.workspace}}/build -DBUILD_TESTING=ON -DCPPJIEBA_BUILD_C_API=OFF -DCPPJIEBA_BUILD_LEGACY_TESTS=${{matrix.legacy_tests}} -DCPPJIEBA_BUILD_BENCHMARKS=OFF -DCMAKE_CXX_STANDARD=${{matrix.cpp_version}} -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DCPPJIEBA_SIMD=${{matrix.simd}}
 
       - name: Check unit-test isolation
         run: |
@@ -64,7 +71,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: ut-linux-x64-${{ matrix.build_type }}-legacy-${{ matrix.legacy_tests }}
+          name: ut-linux-x64-${{ matrix.build_type }}-legacy-${{ matrix.legacy_tests }}-simd-${{ matrix.simd }}
           path: |
             build/unit-tests.xml
             build/Testing/Temporary/LastTest.log

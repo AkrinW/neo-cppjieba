@@ -79,7 +79,8 @@ struct LevelOrderKeys {
 
 // Build the level-order shape of nonempty, strictly ascending keys. Each node covers the sorted range of keys
 // longer than its depth that extend its prefix; a key equal to an edge's prefix sorts first and ends there.
-[[nodiscard]] inline auto level_order_keys(std::span<const Unicode> keys) -> LevelOrderKeys {
+[[nodiscard]]
+inline auto level_order_keys(std::span<const Unicode> keys) -> LevelOrderKeys {
     assert_check(
         [&] {
             return std::ranges::none_of(keys, [](const Unicode &key) { return key.empty(); })
@@ -120,7 +121,8 @@ struct LevelOrderKeys {
 }
 
 // Check one node's edges: Unicode scalar runes in strictly ascending order, each leading to a child or a value.
-[[nodiscard]] inline auto level_order_node_error(std::span<const LevelOrderEdge> edges) -> std::string_view {
+[[nodiscard]]
+inline auto level_order_node_error(std::span<const LevelOrderEdge> edges) -> std::string_view {
     if (edges.empty()) {
         return "a trie node has no edges";
     }
@@ -140,7 +142,8 @@ struct LevelOrderKeys {
 
 // Describe the first violation of the level-order invariants Trie::build_level_order relies on, or return an
 // empty view. A node is reachable only if an edge of an earlier node leads to it, which also rules out cycles.
-[[nodiscard]] inline auto level_order_shape_error(const LevelOrderShape &shape) -> std::string_view {
+[[nodiscard]]
+inline auto level_order_shape_error(const LevelOrderShape &shape) -> std::string_view {
     const auto &[fanouts, edges] = shape;
     if (fanouts.empty()) {
         return "the trie has no root node";
@@ -213,14 +216,16 @@ class Trie {
     size_t node_count_{0};
 
     /// Keep all rune bits separate from the parent id; root transitions use parent id zero.
-    [[nodiscard]] static constexpr auto transition_key(TrieNodeId parent, Rune rune) noexcept -> TransitionKey {
+    [[nodiscard]]
+    static constexpr auto transition_key(TrieNodeId parent, Rune rune) noexcept -> TransitionKey {
         assert_check([&] { return parent != kAbsentNode; }, "Trie: absent transition parent");
         return {parent, rune};
     }
 
     /// Two filter bits per rune, one in each 16-bit half; collisions only add a table lookup.
     /// Queries mask out the top bit, which selects compact or hashed child storage.
-    [[nodiscard]] static constexpr auto child_bits(Rune rune) noexcept -> uint32_t {
+    [[nodiscard]]
+    static constexpr auto child_bits(Rune rune) noexcept -> uint32_t {
         const uint32_t hash = static_cast<uint32_t>(rune) * uint32_t{0x9E3779B1};
         return (uint32_t{1} << (hash >> 28)) | (uint32_t{1} << (16 + ((hash >> 24) & 15)));
     }
@@ -232,7 +237,8 @@ class Trie {
     // Each lookup is implemented once for Self = Trie or const Trie. Queries use the const find_* wrappers;
     // runtime edits use the explicitly named find_mutable_* wrappers.
     template <TrieSelf Self>
-    [[nodiscard]] static auto root_in(Self &self, Rune rune) noexcept -> EntryOf<Self> * {
+    [[nodiscard]]
+    static auto root_in(Self &self, Rune rune) noexcept -> EntryOf<Self> * {
         assert_check([&] { return self.node_count_ > 0; }, "Trie: root lookup on an empty trie");
         if (rune < self.root_.size()) {
             auto &entry = self.root_[rune];
@@ -244,7 +250,8 @@ class Trie {
 
     // The filter tag selects storage without reserving any bits from the configured node id.
     template <TrieSelf Self>
-    [[nodiscard]] static auto transition_in(Self &self, const Entry &parent, Rune rune) noexcept -> EntryOf<Self> * {
+    [[nodiscard]]
+    static auto transition_in(Self &self, const Entry &parent, Rune rune) noexcept -> EntryOf<Self> * {
         assert(parent.child > 0 && parent.child < self.node_count_);
         if ((parent.filter & kCompactFlag) != 0) {
             const auto id = static_cast<size_t>(parent.child);
@@ -259,7 +266,8 @@ class Trie {
     }
 
     template <TrieSelf Self>
-    [[nodiscard]] static auto child_in(Self &self, const Entry &parent, Rune rune) noexcept -> EntryOf<Self> * {
+    [[nodiscard]]
+    static auto child_in(Self &self, const Entry &parent, Rune rune) noexcept -> EntryOf<Self> * {
         assert_check([&] { return parent.child != kAbsentNode && parent.child < self.node_count_; },
                      "Trie: invalid transition parent");
         const auto bits = child_bits(rune) & kFilterMask;
@@ -273,7 +281,8 @@ class Trie {
     }
 
     template <TrieSelf Self>
-    [[nodiscard]] static auto entry_in(Self &self, std::span<const Rune> key) noexcept -> EntryOf<Self> * {
+    [[nodiscard]]
+    static auto entry_in(Self &self, std::span<const Rune> key) noexcept -> EntryOf<Self> * {
         if (self.empty() || key.empty()) {
             return nullptr;
         }
@@ -284,28 +293,34 @@ class Trie {
         return entry;
     }
 
-    [[nodiscard]] auto find_root(Rune rune) const noexcept -> const Entry * {
+    [[nodiscard]]
+    auto find_root(Rune rune) const noexcept -> const Entry * {
         return root_in(*this, rune);
     }
 
-    [[nodiscard]] auto find_transition(const Entry &parent, Rune rune) const noexcept -> const Entry * {
+    [[nodiscard]]
+    auto find_transition(const Entry &parent, Rune rune) const noexcept -> const Entry * {
         return transition_in(*this, parent, rune);
     }
 
-    [[nodiscard]] auto find_child(const Entry &parent, Rune rune) const noexcept -> const Entry * {
+    [[nodiscard]]
+    auto find_child(const Entry &parent, Rune rune) const noexcept -> const Entry * {
         return child_in(*this, parent, rune);
     }
 
-    [[nodiscard]] auto find_entry(std::span<const Rune> key) const noexcept -> const Entry * {
+    [[nodiscard]]
+    auto find_entry(std::span<const Rune> key) const noexcept -> const Entry * {
         return entry_in(*this, key);
     }
 
     // Runtime edits need exclusive access to the trie while they hold a mutable entry.
-    [[nodiscard]] auto find_mutable_transition(const Entry &parent, Rune rune) noexcept -> Entry * {
+    [[nodiscard]]
+    auto find_mutable_transition(const Entry &parent, Rune rune) noexcept -> Entry * {
         return transition_in(*this, parent, rune);
     }
 
-    [[nodiscard]] auto find_mutable_entry(std::span<const Rune> key) noexcept -> Entry * {
+    [[nodiscard]]
+    auto find_mutable_entry(std::span<const Rune> key) noexcept -> Entry * {
         return entry_in(*this, key);
     }
 
@@ -323,7 +338,8 @@ class Trie {
     }
 
     // Count the child nodes an insertion would allocate; an existing path allocates none.
-    [[nodiscard]] auto new_node_count(std::span<const Rune> key) const noexcept -> size_t {
+    [[nodiscard]]
+    auto new_node_count(std::span<const Rune> key) const noexcept -> size_t {
         assert_check([&] { return !key.empty(); }, "Trie: invalid insertion key");
         if (empty()) {
             // The root node is recreated on insertion; every edge except the last needs a child node.
@@ -419,7 +435,8 @@ class Trie {
     };
 
     // Every node has exactly one incoming edge, so walking parent edges spells each valued key.
-    [[nodiscard]] auto live_words() const -> WordList {
+    [[nodiscard]]
+    auto live_words() const -> WordList {
         /// The edge that reaches one node.
         struct IncomingEdge {
             TrieNodeId parent{0};
@@ -572,7 +589,8 @@ class Trie {
     }
 
     // Each node's filter covers the runes of its own edges, before any storage tag.
-    [[nodiscard]] static auto level_order_filters(const LevelOrderShape &shape) -> std::vector<uint32_t> {
+    [[nodiscard]]
+    static auto level_order_filters(const LevelOrderShape &shape) -> std::vector<uint32_t> {
         auto filters = std::vector<uint32_t>(shape.fanouts.size());
         auto begin = size_t{0};
         for (size_t node = 0; node < shape.fanouts.size(); ++node) {
@@ -586,7 +604,8 @@ class Trie {
 
     // The filter an edge to child carries, tagged as mark_child_storage would once compact ranges are sized;
     // terminal edges carry none.
-    [[nodiscard]] auto level_order_filter(std::span<const uint32_t> filters, size_t child) const noexcept -> uint32_t {
+    [[nodiscard]]
+    auto level_order_filter(std::span<const uint32_t> filters, size_t child) const noexcept -> uint32_t {
         if (child == 0) {
             return 0;
         }
@@ -712,18 +731,21 @@ public:
     }
 
     /// Copy the complete storage, including runtime edits that have not been compacted.
-    [[nodiscard]] auto clone() const -> Trie {
+    [[nodiscard]]
+    auto clone() const -> Trie {
         return Trie{*this};
     }
 
     /// Find an exact key, returning its dictionary payload by value.
-    [[nodiscard]] auto find(std::span<const Rune> key) const noexcept -> DictUnit {
+    [[nodiscard]]
+    auto find(std::span<const Rune> key) const noexcept -> DictUnit {
         const auto *entry = find_entry(key);
         return entry ? entry->value : DictUnit{};
     }
 
     /// Check whether inserting key stays within the configured node id range.
-    [[nodiscard]] auto has_capacity_for(std::span<const Rune> key) const noexcept -> bool {
+    [[nodiscard]]
+    auto has_capacity_for(std::span<const Rune> key) const noexcept -> bool {
         const auto count = new_node_count(key);
         const auto first_id = std::max(node_count_, size_t{1});
         return count == 0 || detail::size_below_capacity<TrieNodeId>(first_id + count - 1);
@@ -788,7 +810,8 @@ public:
 
     /// Find all matching prefixes in the trie to build a flat compressed DAG.
     /// Returns a Dag containing offsets and edges.
-    [[nodiscard]] auto find_dag(std::span<const Rune> sentence) const -> Dag {
+    [[nodiscard]]
+    auto find_dag(std::span<const Rune> sentence) const -> Dag {
         auto dag = Dag{};
         find_dag_into(sentence, dag);
         return dag;
@@ -832,18 +855,21 @@ public:
     }
 
     /// Return the total number of nodes in the trie (including the root).
-    [[nodiscard]] auto node_count() const noexcept -> size_t {
+    [[nodiscard]]
+    auto node_count() const noexcept -> size_t {
         return node_count_;
     }
 
     /// Check whether the trie is empty (has not been built, or built with no keys).
-    [[nodiscard]] auto empty() const noexcept -> bool {
+    [[nodiscard]]
+    auto empty() const noexcept -> bool {
         return node_count_ == 0;
     }
 
     /// Reconstruct parent/depth information only when statistics are requested.
     /// Parent ids precede child ids, so a linear pass suffices without retained node objects.
-    [[nodiscard]] auto collect_stats() const -> TrieStats {
+    [[nodiscard]]
+    auto collect_stats() const -> TrieStats {
         auto stats = TrieStats{};
         stats.node_count = node_count_;
         if (empty()) {

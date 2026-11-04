@@ -53,7 +53,8 @@ struct TrieStats {
     size_t compact_edge_count = 0;     ///< Transitions stored in compact child arrays.
 
     /// Pretty-print the stats to a string.
-    [[nodiscard]] auto to_string() const -> std::string {
+    [[nodiscard]]
+    auto to_string() const -> std::string {
         assert_check([this] { return leaf_count <= node_count; }, "TrieStats: leaf count exceeds the node count");
         assert_check([this] { return value_count <= edge_count && lazy_edge_count <= edge_count; },
                      "TrieStats: inconsistent edge counts");

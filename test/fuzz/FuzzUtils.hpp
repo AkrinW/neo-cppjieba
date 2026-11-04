@@ -51,7 +51,8 @@ public:
         return text(rest_.size());
     }
 
-    [[nodiscard]] auto empty() const -> bool {
+    [[nodiscard]]
+    auto empty() const -> bool {
         return rest_.empty();
     }
 

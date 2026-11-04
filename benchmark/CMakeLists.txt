@@ -28,7 +28,8 @@ target_link_libraries(fileio_benchmark PRIVATE limonp::limonp)
 target_link_libraries(load_test PRIVATE limonp::limonp)
 
 if(CPPJIEBA_BUILD_RUST_BENCHMARKS)
-    add_executable(cut_compare_benchmark cut_compare_benchmark.cpp)
+    # Each engine compiles in its own translation unit; see CutCompareEngines.hpp.
+    add_executable(cut_compare_benchmark cut_compare_benchmark.cpp cut_compare_old.cpp cut_compare_neo.cpp)
     target_link_libraries(cut_compare_benchmark PRIVATE
         neo_cppjieba::neo_cppjieba cppjieba::cppjieba jieba_rs::jieba_rs cppjieba_test_data
     )

@@ -58,7 +58,8 @@ protected:
         }
     }
 
-    [[nodiscard]] auto file_path(std::string_view name) const -> std::string {
+    [[nodiscard]]
+    auto file_path(std::string_view name) const -> std::string {
         return path_to_utf8(directory_ / name);
     }
 

@@ -20,6 +20,7 @@ target_include_directories(neo_cppjieba INTERFACE
     "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>"
     "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
 )
+include(cmake/CppJiebaSimd.cmake)
 
 if(CPPJIEBA_ENABLE_ICU)
     find_package(ICU REQUIRED COMPONENTS uc data)

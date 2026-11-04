@@ -121,10 +121,12 @@ public:
     constexpr explicit lines_view(std::string_view content) noexcept : content_(content) {
     }
 
-    [[nodiscard]] constexpr auto begin() const noexcept -> iterator {
+    [[nodiscard]]
+    constexpr auto begin() const noexcept -> iterator {
         return iterator{content_};
     }
-    [[nodiscard]] constexpr auto end() const noexcept -> iterator {
+    [[nodiscard]]
+    constexpr auto end() const noexcept -> iterator {
         return iterator{};
     }
 
@@ -215,10 +217,12 @@ public:
     constexpr split_view(std::string_view content, char delim) noexcept : content_(content), delim_(delim) {
     }
 
-    [[nodiscard]] constexpr auto begin() const noexcept -> iterator {
+    [[nodiscard]]
+    constexpr auto begin() const noexcept -> iterator {
         return iterator{content_, delim_};
     }
-    [[nodiscard]] constexpr auto end() const noexcept -> iterator {
+    [[nodiscard]]
+    constexpr auto end() const noexcept -> iterator {
         return iterator{};
     }
 

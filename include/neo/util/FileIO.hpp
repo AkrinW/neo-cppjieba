@@ -99,18 +99,21 @@ public:
     // content returns a string_view spanning the entire file buffer.
     // The view remains valid while this object or its move destination owns the buffer.
     // Move assignment invalidates views into the destination's previous buffer.
-    [[nodiscard]] auto content() const noexcept -> std::string_view {
+    [[nodiscard]]
+    auto content() const noexcept -> std::string_view {
         return size_ == 0 ? std::string_view{} : std::string_view{data_.get(), size_};
     }
 
     // size returns the file size in bytes.
-    [[nodiscard]] auto size() const noexcept -> size_t {
+    [[nodiscard]]
+    auto size() const noexcept -> size_t {
         return size_;
     }
 
     // is_open reports whether this object owns successfully loaded file content.
     // An empty file is valid, while a moved-from object is not; the descriptor is already closed.
-    [[nodiscard]] auto is_open() const noexcept -> bool {
+    [[nodiscard]]
+    auto is_open() const noexcept -> bool {
         return data_ != nullptr;
     }
 

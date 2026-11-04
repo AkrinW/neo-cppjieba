@@ -1,6 +1,6 @@
 ---
 HeaderFilterRegex: '^(include/neo|test|benchmark)/'
-ExcludeHeaderFilterRegex: '(^benchmark/Perf\.hpp$|(^|/)include/neo/third_party/)'
+ExcludeHeaderFilterRegex: '(^|/)third_party/'
 
 # misc-include-cleaner treats the facades' IWYU export pragmas as the public include surface.
 # bugprone checks run except where they flag deliberate code: swappable parameters, noexcept logging, UTF bit

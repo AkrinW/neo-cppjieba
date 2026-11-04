@@ -16,6 +16,7 @@ if(CPPJIEBA_BUILD_LEGACY_TESTS)
 endif()
 
 include(cmake/HeaderTests.cmake)
+include(cmake/InlineTests.cmake)
 include(cmake/PackageTests.cmake)
 
 foreach(provider IN ITEMS parent installed source)

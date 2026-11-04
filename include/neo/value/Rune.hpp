@@ -29,15 +29,19 @@ struct UnicodeWithOffset {
     // Total size: runes.size() + 1.
     std::vector<SourceOffset> offsets;
 
-    [[nodiscard]] auto get_runes() const & noexcept -> const std::vector<Rune> & {
+    [[nodiscard]]
+    auto get_runes() const & noexcept -> const std::vector<Rune> & {
         return runes;
     }
-    [[nodiscard]] auto get_runes() const && -> const std::vector<Rune> & = delete;
+    [[nodiscard]]
+    auto get_runes() const && -> const std::vector<Rune> & = delete;
 
-    [[nodiscard]] auto get_offsets() const & noexcept -> const std::vector<SourceOffset> & {
+    [[nodiscard]]
+    auto get_offsets() const & noexcept -> const std::vector<SourceOffset> & {
         return offsets;
     }
-    [[nodiscard]] auto get_offsets() const && -> const std::vector<SourceOffset> & = delete;
+    [[nodiscard]]
+    auto get_offsets() const && -> const std::vector<SourceOffset> & = delete;
 };
 
 /// A half-open range [begin, end) of rune positions within the input.
@@ -46,13 +50,15 @@ struct WordRange {
     RuneIndex begin;
     RuneIndex end;
 
-    [[nodiscard]] constexpr auto size() const noexcept -> RuneIndex {
+    [[nodiscard]]
+    constexpr auto size() const noexcept -> RuneIndex {
         assert_check([this] { return begin <= end; }, "Reversed internal WordRange [{}, {})", begin, end);
         return end - begin;
     }
 
     /// Extract the corresponding sub-span from the original runes.
-    [[nodiscard]] auto slice(std::span<const Rune> runes) const noexcept -> std::span<const Rune> {
+    [[nodiscard]]
+    auto slice(std::span<const Rune> runes) const noexcept -> std::span<const Rune> {
         assert_check([&] { return end <= runes.size(); }, "Internal WordRange end {} exceeds {} runes", end,
                      runes.size());
         return runes.subspan(static_cast<std::size_t>(begin), static_cast<std::size_t>(size()));

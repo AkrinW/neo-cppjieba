@@ -105,7 +105,8 @@ concept SymbolSetLike = requires(char32_t r) {
 template <float load_factor>
 class hash_symbol_set {
 public:
-    [[nodiscard]] static auto contains(char32_t r) -> bool {
+    [[nodiscard]]
+    static auto contains(char32_t r) -> bool {
         static const auto set = []() {
             const auto &symbols = neo_cppjieba::detail::DEFAULT_SEPARATORS;
             auto s = std::unordered_set<char32_t>{};
@@ -121,21 +122,24 @@ public:
 // bitmask_symbol_set: uses a bitmask for runes <= 32 and direct comparison for CJK separators.
 class bitmask_symbol_set {
 public:
-    [[nodiscard]] static constexpr auto contains(char32_t r) noexcept -> bool {
+    [[nodiscard]]
+    static constexpr auto contains(char32_t r) noexcept -> bool {
         return neo_cppjieba::detail::is_default_separator(r);
     }
 };
 
 class bitmask_symbol_set_branchless {
 public:
-    [[nodiscard]] static constexpr auto contains(char32_t r) noexcept -> bool {
+    [[nodiscard]]
+    static constexpr auto contains(char32_t r) noexcept -> bool {
         return neo_cppjieba::detail::is_default_separator_branchless(r);
     }
 };
 
 class bitmask_symbol_set_unlikely {
 public:
-    [[nodiscard]] static constexpr auto contains(char32_t r) noexcept -> bool {
+    [[nodiscard]]
+    static constexpr auto contains(char32_t r) noexcept -> bool {
         return neo_cppjieba::detail::is_default_separator_unlikely(r);
     }
 };
@@ -143,7 +147,8 @@ public:
 // sorted_symbol_set: binary search on a pre-sorted span.
 class sorted_symbol_set {
 public:
-    [[nodiscard]] static constexpr auto contains(char32_t r) noexcept -> bool {
+    [[nodiscard]]
+    static constexpr auto contains(char32_t r) noexcept -> bool {
         const auto &symbols = neo_cppjieba::detail::DEFAULT_SEPARATORS;
 
         auto lo = size_t{0};
@@ -165,7 +170,8 @@ public:
 
 class linear_symbol_set {
 public:
-    [[nodiscard]] static constexpr auto contains(char32_t r) noexcept -> bool {
+    [[nodiscard]]
+    static constexpr auto contains(char32_t r) noexcept -> bool {
         const auto &symbols = neo_cppjieba::detail::DEFAULT_SEPARATORS;
         for (auto s : symbols) {
             if (s == r) {
@@ -232,10 +238,12 @@ public:
     bench_pre_filter_view(std::span<const char32_t> data) noexcept : data_(data) {
     }
 
-    [[nodiscard]] auto begin() const -> iterator {
+    [[nodiscard]]
+    auto begin() const -> iterator {
         return iterator{data_};
     }
-    [[nodiscard]] auto end() const noexcept -> iterator {
+    [[nodiscard]]
+    auto end() const noexcept -> iterator {
         return iterator{};
     }
 

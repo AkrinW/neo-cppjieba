@@ -30,6 +30,14 @@ For a release-to-release regression measurement, build both revisions with the
 same compiler and flags, pin them to the same CPU, and alternate their runs.
 Record source revisions and compare token sequences as well as timings.
 
+`cut_compare_benchmark` compiles old CppJieba and Neo in separate translation units
+(`cut_compare_old.cpp`, `cut_compare_neo.cpp`), so each library is inlined as in an application that
+includes only that library. The Neo unit still reaches GCC's `inline-unit-growth` limit, so an unrelated
+change can move a helper out of line and shift Neo timings by several percent; the per-rune helpers listed
+in `test/cmake/CheckInlining.cmake` are forced inline and do not move. When comparing two builds with GCC,
+check that `nm -C cut_compare_benchmark | grep neo_cppjieba` lists the same out-of-line functions for both,
+or configure both with `-DCMAKE_CXX_FLAGS=--param=inline-unit-growth=200`.
+
 ```sh
 git submodule update --init deps/cppjieba deps/limonp
 cmake -S . -B build-bench -DCMAKE_BUILD_TYPE=Release \

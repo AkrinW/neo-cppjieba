@@ -92,7 +92,8 @@ protected:
         return data;
     }
 
-    [[nodiscard]] auto error_message() const -> std::string_view {
+    [[nodiscard]]
+    auto error_message() const -> std::string_view {
         return error_storage.data();
     }
 

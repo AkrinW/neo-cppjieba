@@ -89,7 +89,8 @@ concept NothrowLogArg = !LogArgInvocable<Value> || std::is_nothrow_invocable_v<V
 
 // Invoke diagnostic producers only after a log level or failed check has selected the logging path.
 template <typename Value>
-[[nodiscard]] auto eval_log_arg(Value &&arg) -> decltype(auto) {
+[[nodiscard]]
+auto eval_log_arg(Value &&arg) -> decltype(auto) {
     if constexpr (LogArgInvocable<Value>) {
         return std::invoke(std::forward<Value>(arg));
     } else {
@@ -107,7 +108,8 @@ using LogEvalType = std::conditional_t<std::is_lvalue_reference_v<LogRawEvalType
 
 // Evaluate a bool-like value or predicate exactly once for a check.
 template <CheckCondition Condition>
-[[nodiscard]] constexpr auto eval_check_condition(Condition &&condition) -> bool {
+[[nodiscard]]
+constexpr auto eval_check_condition(Condition &&condition) -> bool {
     if constexpr (CheckPredicate<Condition>) {
         return static_cast<bool>(std::invoke(std::forward<Condition>(condition)));
     } else {
@@ -197,8 +199,9 @@ inline auto write_stderr_record(void * /*context*/, const LogRecordView &record)
 
 // Failed assertions bypass log receivers, write directly to stderr, and invoke the terminate handler.
 template <LogConfiguration Config, typename... Args>
-[[noreturn]] inline auto fail_assertion(std::format_string<LogEvalType<Args>...> fmt, const std::source_location &loc,
-                                        Args &&...args) noexcept -> void {
+[[noreturn]]
+inline auto fail_assertion(std::format_string<LogEvalType<Args>...> fmt, const std::source_location &loc,
+                           Args &&...args) noexcept -> void {
     auto buffer = std::array<char, Config::buffer_size>{};
     const auto message = format_log_message(buffer, fmt, std::forward<Args>(args)...);
     write_stderr_record<Config>(nullptr, LogRecordView{LogLevel::LL_FATAL, message, loc});
@@ -209,8 +212,9 @@ template <LogConfiguration Config, typename... Args>
 // Build a plain version for the exception message (no ANSI codes).
 // The caller location prefixes the message only when Config shows source locations.
 template <LogConfiguration Config, typename... Args>
-[[noreturn]] inline auto throw_check_failure(std::format_string<LogEvalType<Args>...> fmt,
-                                             [[maybe_unused]] const std::source_location &loc, Args &&...args) -> void {
+[[noreturn]]
+inline auto throw_check_failure(std::format_string<LogEvalType<Args>...> fmt,
+                                [[maybe_unused]] const std::source_location &loc, Args &&...args) -> void {
     auto message = std::format(fmt, eval_log_arg(std::forward<Args>(args))...);
     if constexpr (!Config::show_source_location) {
         throw typename Config::Exception{std::move(message)};
@@ -256,12 +260,14 @@ struct LogFormatString {
 
 // Receiver that writes each record to stderr with Config's line capacity and source location policy.
 template <LogConfiguration Config = LogConfig>
-[[nodiscard]] constexpr auto stderr_log_receiver() noexcept -> LogReceiver {
+[[nodiscard]]
+constexpr auto stderr_log_receiver() noexcept -> LogReceiver {
     return LogReceiver{nullptr, &write_stderr_record<Config>};
 }
 
 // Receiver that discards every record, so log calls skip message formatting and lazy arguments.
-[[nodiscard]] constexpr auto null_log_receiver() noexcept -> LogReceiver {
+[[nodiscard]]
+constexpr auto null_log_receiver() noexcept -> LogReceiver {
     return LogReceiver{nullptr, nullptr};
 }
 

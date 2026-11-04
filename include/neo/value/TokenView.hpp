@@ -16,14 +16,15 @@ struct SourceRange {
     SourceOffset begin;
     SourceOffset end;
 
-    [[nodiscard]] constexpr auto size() const noexcept -> SourceOffset {
+    [[nodiscard]]
+    constexpr auto size() const noexcept -> SourceOffset {
         assert_check([&] { return begin <= end; }, "Reversed internal SourceRange [{}, {})", begin, end);
         return end - begin;
     }
 
     template <CharType CharT>
-    [[nodiscard]] constexpr auto slice(std::basic_string_view<CharT> source) const noexcept
-        -> std::basic_string_view<CharT> {
+    [[nodiscard]]
+    constexpr auto slice(std::basic_string_view<CharT> source) const noexcept -> std::basic_string_view<CharT> {
         assert_check([&] { return begin <= end && end <= source.size(); }, "SourceRange exceeds its input");
         return source.substr(static_cast<std::size_t>(begin), static_cast<std::size_t>(end - begin));
     }

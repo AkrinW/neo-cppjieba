@@ -256,9 +256,15 @@ jobs:
         run: ctest --test-dir build -E "$CTEST_EXCLUDE" --no-tests=error --output-on-failure --parallel 4
 
   fuzz:
-    name: libFuzzer
+    name: libFuzzer${{ matrix.simd != 'OFF' && format(' / SIMD={0}', matrix.simd) || '' }}
     runs-on: ubuntu-26.04
     timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        # The AVX2 build runs every target through the vector kernels, and simd_kernels compares them with the
+        # scalar references; corpus inputs do not depend on the level, so only the OFF build saves the corpus.
+        simd: ["OFF", "AVX2"]
     steps:
       - uses: actions/checkout@v7
       - name: Install Clang, LLVM tools and libstdc++
@@ -270,7 +276,7 @@ jobs:
         run: >-
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
           -DCMAKE_CXX_COMPILER="clang++-$LLVM_VERSION" -DCMAKE_CXX_FLAGS=-O1
-          -DBUILD_TESTING=OFF -DCPPJIEBA_BUILD_FUZZERS=ON
+          -DBUILD_TESTING=OFF -DCPPJIEBA_BUILD_FUZZERS=ON -DCPPJIEBA_SIMD=${{ matrix.simd }}
       - name: Build
         run: cmake --build build --parallel 4
       # Start from the corpus the latest master or nightly run kept; pull requests only read it.
@@ -282,10 +288,10 @@ jobs:
           restore-keys: fuzz-corpus-
       - name: Fuzz each target for 30 seconds
         env:
-          FUZZ_MINIMIZE: ${{ github.event_name != 'pull_request' && '1' || '' }}
+          FUZZ_MINIMIZE: ${{ github.event_name != 'pull_request' && matrix.simd == 'OFF' && '1' || '' }}
         run: tools/fuzz.sh build 30
       - name: Save the fuzz corpus
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && matrix.simd == 'OFF'
         uses: actions/cache/save@v6
         with:
           path: build/fuzz-run/corpus
@@ -294,7 +300,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: fuzz-artifacts
+          name: fuzz-artifacts-simd-${{ matrix.simd }}
           path: build/fuzz-run/artifacts/
           if-no-files-found: ignore
           retention-days: 14

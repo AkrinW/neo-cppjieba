@@ -45,12 +45,14 @@ jobs:
         run: |
           tools/add-llvm-apt-source.sh "$LLVM_VERSION"
           sudo apt-get install -y "clang-$LLVM_VERSION" "libclang-rt-$LLVM_VERSION-dev" "llvm-$LLVM_VERSION" "libstdc++-$GCC_VERSION-dev"
-      # Debug keeps library assertions fatal; -O1 keeps the execution rate useful.
+      # Debug keeps library assertions fatal; -O1 keeps the execution rate useful. simd_kernels compares the vector
+      # kernels with their scalar references, so it builds them at AVX2; the other targets keep the default OFF.
       - name: Configure
         run: >-
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
           -DCMAKE_CXX_COMPILER="clang++-$LLVM_VERSION" -DCMAKE_CXX_FLAGS=-O1
           -DBUILD_TESTING=OFF -DCPPJIEBA_BUILD_FUZZERS=ON
+          -DCPPJIEBA_SIMD=${{ matrix.target == 'simd_kernels' && 'AVX2' || 'OFF' }}
       - name: Build
         run: cmake --build build --parallel 4 --target "${{ matrix.target }}_fuzzer"
       - name: Restore the fuzz corpus
