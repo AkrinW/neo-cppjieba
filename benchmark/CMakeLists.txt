@@ -32,7 +32,7 @@ target_link_libraries(load_test PRIVATE limonp::limonp)
 target_sources(simd_compare_benchmark PRIVATE cut_compare_neo.cpp)
 # Targets timed by Google Benchmark.
 foreach(benchmark IN ITEMS
-    dag_benchmark dict_trie_benchmark simd_compare_benchmark trie_benchmark
+    dag_benchmark dict_trie_benchmark jieba_benchmark prefilter_benchmark query_segment_benchmark simd_compare_benchmark trie_benchmark unicode_benchmark
 )
     target_link_libraries(${benchmark} PRIVATE benchmark::benchmark)
 endforeach()
