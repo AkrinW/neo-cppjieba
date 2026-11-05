@@ -19,26 +19,16 @@ env:
 
 jobs:
   format:
-    name: clang-format
+    name: clang-format and header self-containment
     runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v7
-      - name: Install clang-format
+      - name: Install clang-format, Clang and libstdc++
         run: |
           tools/add-llvm-apt-source.sh "$LLVM_VERSION"
-          sudo apt-get install -y "clang-format-$LLVM_VERSION"
+          sudo apt-get install -y "clang-format-$LLVM_VERSION" "clang-$LLVM_VERSION" "libstdc++-$GCC_VERSION-dev"
       - name: Check formatting
         run: CLANG_FORMAT="clang-format-$LLVM_VERSION" tools/clang-format-recursive.sh --check
-
-  headers:
-    name: header self-containment
-    runs-on: ubuntu-26.04
-    steps:
-      - uses: actions/checkout@v7
-      - name: Install Clang and libstdc++
-        run: |
-          tools/add-llvm-apt-source.sh "$LLVM_VERSION"
-          sudo apt-get install -y "clang-$LLVM_VERSION" "libstdc++-$GCC_VERSION-dev"
       # Builds with BUILD_TESTING also compile each header alone through the neo_header_check target.
       - name: Check that each header compiles alone and templates find their callees
         run: CLANG_CXX="clang++-$LLVM_VERSION" tools/check-headers.sh
@@ -100,7 +90,7 @@ jobs:
         run: CLANG_TIDY="clang-tidy-$LLVM_VERSION" tools/clang-tidy-recursive.sh --check
 
   sanitizers:
-    name: GCC ${{ matrix.name }}
+    name: GCC ${{ matrix.name }}${{ matrix.simd != 'OFF' && format(' / SIMD={0}', matrix.simd) || '' }}
     runs-on: ubuntu-26.04
     timeout-minutes: 45
     strategy:
@@ -108,13 +98,16 @@ jobs:
       matrix:
         include:
           # libstdc++ assertions bounds-check containers, spans and views without changing the library ABI.
+          # AVX2 also compiles the SSE2 kernels, so the address checks reach both x86 vector widths.
           - name: ASan + UBSan
             artifact: asan-ubsan
+            simd: AVX2
             flags: >-
               -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer
               -D_GLIBCXX_ASSERTIONS
           - name: TSan
             artifact: tsan
+            simd: "OFF"
             flags: -O1 -g -fsanitize=thread -fno-omit-frame-pointer
     env:
       # The symbol and C-host private-runtime checks expect the bundled allocator, which sanitizers replace;
@@ -136,7 +129,7 @@ jobs:
           -DCMAKE_C_COMPILER="gcc-$GCC_VERSION" -DCMAKE_CXX_COMPILER="g++-$GCC_VERSION"
           "-DCMAKE_C_FLAGS=${{ matrix.flags }}" "-DCMAKE_CXX_FLAGS=${{ matrix.flags }}"
           -DBUILD_TESTING=ON -DCPPJIEBA_BUILD_C_API=ON
-          -DCPPJIEBA_C_API_BUILD_SHARED=ON -DCPPJIEBA_C_API_BUILD_STATIC=ON
+          -DCPPJIEBA_C_API_BUILD_SHARED=ON -DCPPJIEBA_C_API_BUILD_STATIC=ON -DCPPJIEBA_SIMD=${{ matrix.simd }}
       - name: Build
         run: cmake --build build --parallel 4
       - name: Test unit and C ABI contracts
@@ -255,16 +248,12 @@ jobs:
       - name: Test unit, C ABI and fuzz corpus replays
         run: ctest --test-dir build -E "$CTEST_EXCLUDE" --no-tests=error --output-on-failure --parallel 4
 
+  # Every target runs through the AVX2 kernels, and simd_kernels compares the SSE2 and AVX2 kernels with the scalar
+  # references; the nightly run fuzzes the other targets at OFF. Corpus inputs do not depend on the level.
   fuzz:
-    name: libFuzzer${{ matrix.simd != 'OFF' && format(' / SIMD={0}', matrix.simd) || '' }}
+    name: libFuzzer / SIMD=AVX2
     runs-on: ubuntu-26.04
     timeout-minutes: 40
-    strategy:
-      fail-fast: false
-      matrix:
-        # The AVX2 build runs every target through the vector kernels, and simd_kernels compares them with the
-        # scalar references; corpus inputs do not depend on the level, so only the OFF build saves the corpus.
-        simd: ["OFF", "AVX2"]
     steps:
       - uses: actions/checkout@v7
       - name: Install Clang, LLVM tools and libstdc++
@@ -276,7 +265,7 @@ jobs:
         run: >-
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
           -DCMAKE_CXX_COMPILER="clang++-$LLVM_VERSION" -DCMAKE_CXX_FLAGS=-O1
-          -DBUILD_TESTING=OFF -DCPPJIEBA_BUILD_FUZZERS=ON -DCPPJIEBA_SIMD=${{ matrix.simd }}
+          -DBUILD_TESTING=OFF -DCPPJIEBA_BUILD_FUZZERS=ON -DCPPJIEBA_SIMD=AVX2
       - name: Build
         run: cmake --build build --parallel 4
       # Start from the corpus the latest master or nightly run kept; pull requests only read it.
@@ -288,10 +277,10 @@ jobs:
           restore-keys: fuzz-corpus-
       - name: Fuzz each target for 30 seconds
         env:
-          FUZZ_MINIMIZE: ${{ github.event_name != 'pull_request' && matrix.simd == 'OFF' && '1' || '' }}
+          FUZZ_MINIMIZE: ${{ github.event_name != 'pull_request' && '1' || '' }}
         run: tools/fuzz.sh build 30
       - name: Save the fuzz corpus
-        if: github.event_name != 'pull_request' && matrix.simd == 'OFF'
+        if: github.event_name != 'pull_request'
         uses: actions/cache/save@v6
         with:
           path: build/fuzz-run/corpus
@@ -300,7 +289,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: fuzz-artifacts-simd-${{ matrix.simd }}
+          name: fuzz-artifacts
           path: build/fuzz-run/artifacts/
           if-no-files-found: ignore
           retention-days: 14

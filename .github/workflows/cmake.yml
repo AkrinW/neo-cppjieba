@@ -14,106 +14,179 @@ on:
 permissions:
   contents: read
 
-env:
-  BUILD_TYPE: Release
-  CXX: g++-16
-
 jobs:
+  # One Debug and one Release job per platform. Debug builds at the platform's highest SIMD level, which also compiles
+  # and tests the lower levels; Release keeps the default OFF, whose neo_simd_<level> tests still cover every level
+  # the runner executes, and produces the C API package. Linux x64 Debug builds run in the Quality workflow.
   build:
-    name: Linux x64 / ${{ matrix.build_type }} / legacy=${{ matrix.legacy_tests }}${{ matrix.simd != 'OFF' && format(' / SIMD={0}', matrix.simd) || '' }}
-    env:
-      BUILD_TYPE: ${{ matrix.build_type }}
+    name: ${{ matrix.platform }} / ${{ matrix.build_type }} / SIMD=${{ matrix.simd }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-26.04]
-        cpp_version: [23]
-        legacy_tests: ["OFF", "ON"]
-        build_type: [Debug, Release]
-        simd: ["OFF"]
-        # The whole suite at each x86 SIMD level; OFF jobs already run the SIMD unit tests at every level the runner
-        # supports, but only these jobs segment and extract keywords through the vector kernels end to end.
         include:
-          - {os: ubuntu-26.04, cpp_version: 23, legacy_tests: "OFF", build_type: Debug, simd: AVX2}
-          - {os: ubuntu-26.04, cpp_version: 23, legacy_tests: "OFF", build_type: Release, simd: AVX2}
-          - {os: ubuntu-26.04, cpp_version: 23, legacy_tests: "OFF", build_type: Release, simd: SSE2}
+          # Linux x64 also builds the legacy dependency tests.
+          - {platform: linux-x64, os: ubuntu-26.04, build_type: Release, simd: "OFF", legacy: "ON"}
+          - {platform: linux-arm64, os: ubuntu-26.04-arm, build_type: Debug, simd: NEON, legacy: "OFF"}
+          - {platform: linux-arm64, os: ubuntu-26.04-arm, build_type: Release, simd: "OFF", legacy: "OFF"}
+          - {platform: macos-arm64, os: macos-26, build_type: Debug, simd: NEON, legacy: "OFF"}
+          - {platform: macos-arm64, os: macos-26, build_type: Release, simd: "OFF", legacy: "OFF"}
+          - {platform: windows-x64, os: windows-2025-vs2026, build_type: Debug, simd: AVX2, legacy: "OFF"}
+          - {platform: windows-x64, os: windows-2025-vs2026, build_type: Release, simd: "OFF", legacy: "OFF"}
+          - {platform: windows-arm64, os: windows-11-vs2026-arm, build_type: Debug, simd: NEON, legacy: "OFF"}
+          - {platform: windows-arm64, os: windows-11-vs2026-arm, build_type: Release, simd: "OFF", legacy: "OFF"}
 
     steps:
-      - name: Check out repository code
-        uses: actions/checkout@v7
+      - uses: actions/checkout@v7
 
-      - name: Initialize legacy comparison dependency
-        if: matrix.legacy_tests == 'ON'
-        run: git submodule update --init deps/cppjieba
+      # The benchmarks and the legacy tests compare with the original CppJieba.
+      - name: Initialize comparison dependencies
+        run: git submodule update --init deps/cppjieba deps/limonp
 
-      - name: Install C++23 compiler
-        run: sudo apt-get update && sudo apt-get install -y g++-16
+      - name: Install GCC on Linux
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y gcc-16 g++-16
 
-      - name: Configure CMake
-        run: cmake -B ${{github.workspace}}/build -DBUILD_TESTING=ON -DCPPJIEBA_BUILD_C_API=OFF -DCPPJIEBA_BUILD_LEGACY_TESTS=${{matrix.legacy_tests}} -DCPPJIEBA_BUILD_BENCHMARKS=OFF -DCMAKE_CXX_STANDARD=${{matrix.cpp_version}} -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DCPPJIEBA_SIMD=${{matrix.simd}}
+      - name: Install LLVM and libc++ on macOS
+        if: runner.os == 'macOS'
+        run: brew install llvm@23
 
-      - name: Check unit-test isolation
+      - name: Configure Linux
+        if: runner.os == 'Linux'
+        run: >-
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+          -DCMAKE_C_COMPILER=gcc-16 -DCMAKE_CXX_COMPILER=g++-16 -DCMAKE_CXX_STANDARD=23
+          -DBUILD_TESTING=ON -DCPPJIEBA_BUILD_LEGACY_TESTS=${{ matrix.legacy }}
+          -DCPPJIEBA_BUILD_C_API=ON -DCPPJIEBA_C_API_BUILD_SHARED=ON -DCPPJIEBA_C_API_BUILD_STATIC=ON
+          -DCPPJIEBA_BUILD_EXAMPLES=ON -DCPPJIEBA_BUILD_BENCHMARKS=ON -DCPPJIEBA_SIMD=${{ matrix.simd }}
+
+      - name: Configure macOS
+        if: runner.os == 'macOS'
+        shell: bash
         run: |
-          test ! -d build/benchmark
-          if [ "${{matrix.legacy_tests}}" = "OFF" ]; then
-            test ! -d build/deps
-          fi
+          llvm_prefix="$(brew --prefix llvm@23)"
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DCMAKE_C_COMPILER="$llvm_prefix/bin/clang" \
+            -DCMAKE_CXX_COMPILER="$llvm_prefix/bin/clang++" \
+            -DCMAKE_CXX_FLAGS="-stdlib=libc++" \
+            -DCMAKE_EXE_LINKER_FLAGS="-L$llvm_prefix/lib/c++ -L$llvm_prefix/lib/unwind -lunwind -Wl,-rpath,$llvm_prefix/lib/c++ -Wl,-rpath,$llvm_prefix/lib/unwind" \
+            -DCMAKE_CXX_STANDARD=23 \
+            -DBUILD_TESTING=ON -DCPPJIEBA_BUILD_LEGACY_TESTS=${{ matrix.legacy }} \
+            -DCPPJIEBA_BUILD_C_API=ON -DCPPJIEBA_C_API_BUILD_SHARED=ON -DCPPJIEBA_C_API_BUILD_STATIC=ON \
+            -DCPPJIEBA_BUILD_EXAMPLES=ON -DCPPJIEBA_BUILD_BENCHMARKS=ON -DCPPJIEBA_SIMD=${{ matrix.simd }}
 
-      - name: Build
-        run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} --parallel 2
+      - name: Configure Windows
+        if: runner.os == 'Windows'
+        run: >-
+          cmake -S . -B build -G "Visual Studio 18 2026" -A ${{ runner.arch == 'ARM64' && 'ARM64' || 'x64' }}
+          -DCMAKE_CXX_STANDARD=23
+          -DBUILD_TESTING=ON -DCPPJIEBA_BUILD_LEGACY_TESTS=${{ matrix.legacy }}
+          -DCPPJIEBA_BUILD_C_API=ON -DCPPJIEBA_C_API_BUILD_SHARED=ON -DCPPJIEBA_C_API_BUILD_STATIC=ON
+          -DCPPJIEBA_BUILD_EXAMPLES=ON -DCPPJIEBA_BUILD_BENCHMARKS=ON -DCPPJIEBA_SIMD=${{ matrix.simd }}
 
-      - name: Test
-        working-directory: ${{github.workspace}}/build
-        run: ctest -C ${{env.BUILD_TYPE}} --output-on-failure --output-junit unit-tests.xml
+      - name: Build the library users, tests, examples and benchmarks
+        run: cmake --build build --config ${{ matrix.build_type }} --parallel 4
 
-      - name: Upload unit-test results
+      - name: Test units, C ABI contracts, C hosts, symbols and installed consumers
+        run: >-
+          ctest --test-dir build -C ${{ matrix.build_type }}
+          --no-tests=error --output-on-failure --output-junit unit-tests.xml
+
+      - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: ut-linux-x64-${{ matrix.build_type }}-legacy-${{ matrix.legacy_tests }}-simd-${{ matrix.simd }}
+          name: ut-${{ matrix.platform }}-${{ matrix.build_type }}-simd-${{ matrix.simd }}
           path: |
             build/unit-tests.xml
             build/Testing/Temporary/LastTest.log
+            build/c-api-consumer-*/**/Testing/Temporary/LastTest.log
           if-no-files-found: ignore
           retention-days: 14
 
+      - name: Install public headers and dictionaries
+        run: cmake --install build --config ${{ matrix.build_type }} --prefix install
+
+      # Packages come only from OFF builds, which run on any CPU of the platform.
+      - name: Install C API libraries, headers and package metadata
+        if: matrix.simd == 'OFF'
+        run: cmake --install build/api --config ${{ matrix.build_type }} --prefix c-api-install
+
+      - name: Archive C API package
+        if: matrix.simd == 'OFF'
+        # Preserve versioned shared-library symlinks in the uploaded package.
+        run: >-
+          cmake -E tar czf c-api-${{ matrix.platform }}-${{ matrix.build_type }}.tar.gz
+          --format=gnutar c-api-install
+
+      - name: Upload C API package
+        if: matrix.simd == 'OFF'
+        uses: actions/upload-artifact@v7
+        with:
+          name: c-api-${{ matrix.platform }}-${{ matrix.build_type }}
+          path: c-api-${{ matrix.platform }}-${{ matrix.build_type }}.tar.gz
+          if-no-files-found: error
+          retention-days: 14
+
+  # Released symbols and public types must stay binary compatible; additions are reported only.
+  abi:
+    name: C ABI compatibility with the latest release
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v7
+        with:
+          # The baseline is the latest v* tag reachable from the checkout.
+          fetch-depth: 0
+
+      - name: Install GCC and libabigail
+        run: sudo apt-get update && sudo apt-get install -y gcc-16 g++-16 abigail-tools
+
+      - name: Compare with the latest release
+        env:
+          CC: gcc-16
+          CXX: g++-16
+        run: tools/check-c-abi.sh build-abi
+
+      - name: Publish the ABI report
+        if: always()
+        run: |
+          if [ -f build-abi/summary.md ]; then
+            cat build-abi/summary.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
   benchmarks:
-    name: Release benchmarks / Rust=${{ matrix.rust }}
+    name: Release benchmarks
     runs-on: ubuntu-26.04
     timeout-minutes: 30
     defaults:
       run:
         shell: bash
     env:
+      CXX: g++-16
       RUSTUP_TOOLCHAIN: "1.99.0"
       UPDATE_BENCHMARK_DOCS: ${{ github.event_name == 'workflow_dispatch' && inputs.update_benchmark_docs && github.ref_name == github.event.repository.default_branch }}
-    strategy:
-      fail-fast: false
-      matrix:
-        rust: ["OFF", "ON"]
     steps:
       - uses: actions/checkout@v7
       - name: Initialize comparison dependency
         run: git submodule update --init deps/cppjieba deps/limonp
       - name: Initialize pinned Rust and Python jieba
-        if: matrix.rust == 'ON'
         run: git submodule update --init deps/jieba-rs deps/python-jieba
       - name: Install C++23 compiler
         run: sudo apt-get update && sudo apt-get install -y g++-16
       - name: Set up Python
-        if: matrix.rust == 'ON'
         uses: actions/setup-python@v7
         with:
           python-version: "3.14.8"
       - name: Install pinned Rust compiler
-        if: matrix.rust == 'ON'
         run: rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal --no-self-update
       - name: Configure standalone benchmarks
         run: >-
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
           -DBUILD_TESTING=OFF -DCPPJIEBA_BUILD_BENCHMARKS=ON
-          -DCPPJIEBA_BUILD_RUST_BENCHMARKS=${{matrix.rust}}
+          -DCPPJIEBA_BUILD_RUST_BENCHMARKS=ON
       - name: Check benchmark isolation
         run: |
           test ! -d build/test
@@ -121,7 +194,6 @@ jobs:
       - name: Build
         run: cmake --build build --parallel 2
       - name: Record benchmark environment
-        if: matrix.rust == 'ON'
         run: |
           mkdir -p benchmark/results/ci
           {
@@ -136,7 +208,7 @@ jobs:
             lscpu
           } > benchmark/results/ci/environment.txt
       - name: Record snapshot provenance
-        if: matrix.rust == 'ON' && env.UPDATE_BENCHMARK_DOCS == 'true'
+        if: env.UPDATE_BENCHMARK_DOCS == 'true'
         env:
           BENCHMARK_RUNNER_ENVIRONMENT: ${{ runner.environment }}
           BENCHMARK_RUNNER_IMAGE: ubuntu-26.04
@@ -144,18 +216,14 @@ jobs:
           python docs/benchmarks/snapshot.py record-environment
           --build-directory build --output benchmark/results/ci/environment.json
       - name: Rust adapter unit tests
-        if: matrix.rust == 'ON'
         run: >-
           cargo test --release --locked --manifest-path deps/rust-jieba/Cargo.toml
           --target-dir build/deps/rust-jieba/cargo
       - name: Python adapter unit tests
-        if: matrix.rust == 'ON'
         run: python -B -m unittest discover -s benchmark -p 'python_compare_benchmark_test.py' -v
       - name: Benchmark snapshot unit tests
-        if: matrix.rust == 'ON'
         run: python -B -m unittest discover -s docs/benchmarks -p '*_test.py' -v
       - name: Rust comparison smoke check
-        if: matrix.rust == 'ON'
         working-directory: ${{runner.temp}}
         run: >-
           ${{github.workspace}}/build/benchmark/cut_compare_benchmark
@@ -163,7 +231,6 @@ jobs:
           '' ${{github.workspace}}/test/testdata/testlines.utf8 1 1
 
       - name: Compare old C++, neo C++, Rust and Python
-        if: matrix.rust == 'ON'
         run: |
           benchmark_cpu="$(python -c 'import os; print(min(os.sched_getaffinity(0)))')"
           printf 'benchmark_cpu=%s\n' "$benchmark_cpu" >> benchmark/results/ci/environment.txt
@@ -181,7 +248,7 @@ jobs:
           done
 
       - name: Generate benchmark documentation
-        if: matrix.rust == 'ON' && env.UPDATE_BENCHMARK_DOCS == 'true'
+        if: env.UPDATE_BENCHMARK_DOCS == 'true'
         run: |
           python -m pip install matplotlib==3.11.2
           python docs/benchmarks/snapshot.py generate \
@@ -190,7 +257,7 @@ jobs:
           git diff --check
 
       - name: Upload generated benchmark documentation
-        if: matrix.rust == 'ON' && env.UPDATE_BENCHMARK_DOCS == 'true'
+        if: env.UPDATE_BENCHMARK_DOCS == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: benchmark-documentation
@@ -202,7 +269,7 @@ jobs:
           retention-days: 14
 
       - name: Publish comparison summary
-        if: always() && matrix.rust == 'ON'
+        if: always()
         env:
           BENCHMARK_STATUS: ${{ job.status }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -231,7 +298,7 @@ jobs:
           cat benchmark/results/ci/summary.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload comparison reports
-        if: always() && matrix.rust == 'ON'
+        if: always()
         uses: actions/upload-artifact@v7
         with:
           name: benchmarks-linux-x64-release
@@ -277,7 +344,7 @@ jobs:
 
   benchmark-docs:
     name: Benchmark documentation PR
-    needs: [build, benchmarks, library]
+    needs: [build, benchmarks, isolation]
     if: >-
       github.event_name == 'workflow_dispatch' && inputs.update_benchmark_docs &&
       github.ref_name == github.event.repository.default_branch
@@ -323,10 +390,16 @@ jobs:
             docs/benchmarks/snapshot.json
             docs/benchmarks/comparison.svg
 
-  library:
+  # Each optional component stays out of builds that do not request it.
+  isolation:
+    name: Build option isolation
     runs-on: ubuntu-26.04
+    env:
+      CXX: g++-16
     steps:
       - uses: actions/checkout@v7
+      - name: Initialize comparison dependencies
+        run: git submodule update --init deps/cppjieba deps/limonp
       - name: Install C++23 compiler
         run: sudo apt-get update && sudo apt-get install -y g++-16
       - name: Configure only the public library
@@ -342,3 +415,15 @@ jobs:
           test ! -e install/include/limonp
           test ! -d build/deps
           test ! -d build/_deps
+      - name: Check that unit tests configure without benchmarks or comparison dependencies
+        run: |
+          cmake -S . -B build-tests -DBUILD_TESTING=ON -DCPPJIEBA_BUILD_LEGACY_TESTS=OFF -DCPPJIEBA_BUILD_BENCHMARKS=OFF
+          test ! -d build-tests/benchmark
+          test ! -d build-tests/deps
+      - name: Build the benchmarks without tests or Rust
+        run: |
+          cmake -S . -B build-benchmarks -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF \
+            -DCPPJIEBA_BUILD_BENCHMARKS=ON -DCPPJIEBA_BUILD_RUST_BENCHMARKS=OFF
+          test ! -d build-benchmarks/test
+          test ! -d build-benchmarks/_deps/googletest-src
+          cmake --build build-benchmarks --parallel 4

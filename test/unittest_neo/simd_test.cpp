@@ -25,14 +25,17 @@ using namespace neo_cppjieba::detail::simd;
 
 namespace {
 
-// Runes next to the separators in value or in the low bitmask, plus values a signed lane compare would misread.
-constexpr auto near_separator_runes = std::array<char32_t, 16>{
-    8, 11, 31, 33, 0x49, 0x4A, 0x60, 0x2002, 0x3001, 0x3003, 0xFF0B, 0xFF0D, 0x1FF0C, 0x13002, 0x80000020, 0xFFFFFFFF};
+// Runes next to the separators in value or in the low bitmask, plus values a signed lane compare would misread and
+// the edge of the 16-bit saturation the NEON kernel narrows runes with.
+constexpr auto near_separator_runes =
+    std::array<char32_t, 18>{8,      11,     31,     33,     0x49,    0x4A,    0x60,    0x2002,     0x3001,
+                             0x3003, 0xFF0B, 0xFF0D, 0xFFFF, 0x10000, 0x1FF0C, 0x13002, 0x80000020, 0xFFFFFFFF};
 
-// Matches of the default separators from the backend this build selects.
-auto active_matches(std::span<const char32_t> runes) -> std::vector<RuneIndex> {
+// Matches of the default separators from one backend.
+template <SimdLevel Backend>
+auto backend_matches(std::span<const char32_t> runes) -> std::vector<RuneIndex> {
     auto out = std::vector<RuneIndex>{};
-    append_matches(runes, DEFAULT_SEPARATORS, is_default_separator_unlikely, out);
+    append_matches<Backend>(runes, DEFAULT_SEPARATORS, is_default_separator_unlikely, out);
     return out;
 }
 
@@ -43,6 +46,28 @@ auto scalar_matches(std::span<const char32_t> runes) -> std::vector<RuneIndex> {
     return out;
 }
 
+// Every backend's matches must equal the scalar reference's.
+auto expect_backends_match_scalar(std::span<const char32_t> runes) -> void {
+    const auto expected = scalar_matches(runes);
+    for_each_compiled_backend(
+        [&]<SimdLevel Backend>() { EXPECT_EQ(backend_matches<Backend>(runes), expected) << level_name(Backend); });
+}
+
+// The backends a build at the given level compiles: scalar, then its instruction-set family up to the level.
+auto backends_of(SimdLevel build_level) -> std::vector<SimdLevel> {
+    switch (build_level) {
+        case SimdLevel::OFF:
+            return {SimdLevel::OFF};
+        case SimdLevel::SSE2:
+            return {SimdLevel::OFF, SimdLevel::SSE2};
+        case SimdLevel::AVX2:
+            return {SimdLevel::OFF, SimdLevel::SSE2, SimdLevel::AVX2};
+        case SimdLevel::NEON:
+            return {SimdLevel::OFF, SimdLevel::NEON};
+    }
+    std::unreachable();
+}
+
 } // namespace
 
 // The CPPJIEBA_SIMD option, or a variant executable's own definition, reaches the headers as the same level.
@@ -50,15 +75,25 @@ TEST(SimdTest, LevelMatchesBuildOption) {
     EXPECT_EQ(level, expected_simd_level);
 }
 
+// An AVX2 build also compiles the SSE2 kernels, so one test executable checks both widths.
+TEST(SimdTest, BuildCompilesTheScalarBackendAndEveryLowerLevelOfItsFamily) {
+    EXPECT_EQ(std::vector(compiled_backends.begin(), compiled_backends.end()), backends_of(expected_simd_level));
+}
+
 TEST(SimdTest, RuneMatchAppendsAfterExistingIndices) {
     const auto runes = std::u32string{U"中 文，"};
-    auto out = std::vector<RuneIndex>{7};
-    append_matches(std::span<const char32_t>{runes}, DEFAULT_SEPARATORS, is_default_separator_unlikely, out);
-    EXPECT_EQ(out, (std::vector<RuneIndex>{7, 1, 3}));
+    for_each_compiled_backend([&]<SimdLevel Backend>() {
+        auto out = std::vector<RuneIndex>{7};
+        append_matches<Backend>(std::span<const char32_t>{runes}, DEFAULT_SEPARATORS, is_default_separator_unlikely,
+                                out);
+        EXPECT_EQ(out, (std::vector<RuneIndex>{7, 1, 3})) << level_name(Backend);
+    });
 }
 
 TEST(SimdTest, RuneMatchFindsNothingInEmptyInput) {
-    EXPECT_TRUE(active_matches(std::span<const char32_t>{}).empty());
+    for_each_compiled_backend([]<SimdLevel Backend>() {
+        EXPECT_TRUE(backend_matches<Backend>(std::span<const char32_t>{}).empty()) << level_name(Backend);
+    });
 }
 
 // One separator at each position of every length up to three blocks covers each lane, block boundary and tail.
@@ -67,8 +102,8 @@ TEST(SimdTest, RuneMatchAgreesWithScalarAtEveryPositionAndLength) {
         for (auto position = std::size_t{0}; position < length; ++position) {
             auto runes = std::u32string(length, U'中');
             runes[position] = U'，';
-            const auto span = std::span<const char32_t>{runes};
-            ASSERT_EQ(active_matches(span), scalar_matches(span)) << "length " << length << ", position " << position;
+            SCOPED_TRACE(testing::Message() << "length " << length << ", position " << position);
+            expect_backends_match_scalar(std::span<const char32_t>{runes});
         }
     }
 }
@@ -79,9 +114,8 @@ TEST(SimdTest, RuneMatchFindsEveryRuneWhenAllAreSeparators) {
         runes.push_back(DEFAULT_SEPARATORS[i % DEFAULT_SEPARATORS.size()]);
     }
     const auto span = std::span<const char32_t>{runes};
-    const auto matches = active_matches(span);
-    ASSERT_EQ(matches.size(), runes.size());
-    EXPECT_EQ(matches, scalar_matches(span));
+    ASSERT_EQ(scalar_matches(span).size(), runes.size());
+    expect_backends_match_scalar(span);
 }
 
 TEST(SimdTest, RuneMatchIgnoresRunesNearSeparators) {
@@ -89,7 +123,9 @@ TEST(SimdTest, RuneMatchIgnoresRunesNearSeparators) {
     for (auto i = std::size_t{0}; i < 3 * match_block_size; ++i) {
         runes.push_back(near_separator_runes[i % near_separator_runes.size()]);
     }
-    EXPECT_TRUE(active_matches(std::span<const char32_t>{runes}).empty());
+    for_each_compiled_backend([&]<SimdLevel Backend>() {
+        EXPECT_TRUE(backend_matches<Backend>(std::span<const char32_t>{runes}).empty()) << level_name(Backend);
+    });
 }
 
 TEST(SimdTest, RuneMatchAgreesWithScalarOnRandomText) {
@@ -107,8 +143,8 @@ TEST(SimdTest, RuneMatchAgreesWithScalarOnRandomText) {
                 rune = near_separator_runes[index_of(engine)];
             }
         }
-        const auto span = std::span<const char32_t>{runes};
-        ASSERT_EQ(active_matches(span), scalar_matches(span)) << "trial " << trial;
+        SCOPED_TRACE(testing::Message() << "trial " << trial);
+        expect_backends_match_scalar(std::span<const char32_t>{runes});
     }
 }
 
@@ -146,22 +182,26 @@ auto run_viterbi(const Forward &forward, const StateScores &start, const std::ar
     return {.path = std::move(path), .weight_bits = bits};
 }
 
-// The CppJieba-rule backend this build selects with a given floor, and the scalar reference every backend must match.
-constexpr auto active_forward = [](ViterbiFloor<HMMState> floor) {
+// The CppJieba-rule forward pass of one backend with a given floor, and the scalar reference every backend must match.
+template <SimdLevel Backend>
+auto backend_forward(ViterbiFloor<HMMState> floor) {
     return [floor](const auto &start, auto transitions, const auto &emit_at, auto path) {
-        return viterbi_forward(start, transitions, floor, emit_at, path);
+        return viterbi_forward<Backend>(start, transitions, floor, emit_at, path);
     };
-};
+}
 constexpr auto scalar_forward = [](ViterbiFloor<HMMState> floor) {
     return [floor](const auto &start, auto transitions, const auto &emit_at, auto path) {
         return scalar::viterbi_forward(start, transitions, floor, emit_at, path);
     };
 };
 
-// The legal-predecessor backend this build selects, and its scalar reference.
-constexpr auto active_legal_forward = [](const auto &start, auto transitions, const auto &emit_at, auto path) {
-    return viterbi_forward_legal(start, transitions, emit_at, path);
-};
+// The legal-predecessor forward pass of one backend, and its scalar reference.
+template <SimdLevel Backend>
+auto backend_legal_forward() {
+    return [](const auto &start, auto transitions, const auto &emit_at, auto path) {
+        return viterbi_forward_legal<Backend>(start, transitions, emit_at, path);
+    };
+}
 constexpr auto scalar_legal_forward = [](const auto &start, auto transitions, const auto &emit_at, auto path) {
     return scalar::viterbi_forward_legal(start, transitions, emit_at, path);
 };
@@ -202,9 +242,12 @@ TEST(SimdTest, ViterbiAgreesWithScalarOnRandomColumns) {
     auto engine = std::mt19937{20261103};
     for (auto trial = 0; trial < 2000; ++trial) {
         const auto input = random_input(engine);
-        ASSERT_EQ(run_viterbi(active_forward(cpp_floor), input.start, input.transitions, input.emissions),
-                  run_viterbi(scalar_forward(cpp_floor), input.start, input.transitions, input.emissions))
-            << "trial " << trial;
+        const auto expected = run_viterbi(scalar_forward(cpp_floor), input.start, input.transitions, input.emissions);
+        for_each_compiled_backend([&]<SimdLevel Backend>() {
+            EXPECT_EQ(run_viterbi(backend_forward<Backend>(cpp_floor), input.start, input.transitions, input.emissions),
+                      expected)
+                << level_name(Backend) << ", trial " << trial;
+        });
     }
 }
 
@@ -216,28 +259,37 @@ TEST(SimdTest, ViterbiAgreesWithScalarForAnyFloor) {
         const auto floor = ViterbiFloor<HMMState>{.score = viterbi_scores[score_of(engine)],
                                                   .state = static_cast<HMMState>(state_of(engine))};
         const auto input = random_input(engine);
-        ASSERT_EQ(run_viterbi(active_forward(floor), input.start, input.transitions, input.emissions),
-                  run_viterbi(scalar_forward(floor), input.start, input.transitions, input.emissions))
-            << "trial " << trial;
+        const auto expected = run_viterbi(scalar_forward(floor), input.start, input.transitions, input.emissions);
+        for_each_compiled_backend([&]<SimdLevel Backend>() {
+            EXPECT_EQ(run_viterbi(backend_forward<Backend>(floor), input.start, input.transitions, input.emissions),
+                      expected)
+                << level_name(Backend) << ", trial " << trial;
+        });
     }
 }
 
 TEST(SimdTest, ViterbiKeepsFloorStateWhenNoCandidateExceedsTheFloor) {
     const auto row = StateScores{-1.0, -2.0, -3.0, -4.0};
     const auto absent = StateScores{MIN_DOUBLE, MIN_DOUBLE, MIN_DOUBLE, MIN_DOUBLE};
-    const auto result =
-        run_viterbi(active_forward(cpp_floor), row, std::array{row, row, row, row}, {absent, absent, absent});
     const auto floor_row = PathRow{HMMState::E, HMMState::E, HMMState::E, HMMState::E};
-    EXPECT_EQ(result.path[1], floor_row);
-    EXPECT_EQ(result.path[2], floor_row);
     const auto floor_bits = std::bit_cast<std::uint64_t>(MIN_DOUBLE);
-    EXPECT_EQ(result.weight_bits, (std::array{floor_bits, floor_bits, floor_bits, floor_bits}));
+    for_each_compiled_backend([&]<SimdLevel Backend>() {
+        SCOPED_TRACE(level_name(Backend));
+        const auto result = run_viterbi(backend_forward<Backend>(cpp_floor), row, std::array{row, row, row, row},
+                                        {absent, absent, absent});
+        EXPECT_EQ(result.path[1], floor_row);
+        EXPECT_EQ(result.path[2], floor_row);
+        EXPECT_EQ(result.weight_bits, (std::array{floor_bits, floor_bits, floor_bits, floor_bits}));
+    });
 }
 
 TEST(SimdTest, ViterbiTakesTheFirstPredecessorOnTies) {
     const auto row = StateScores{-1.0, -1.0, -1.0, -1.0};
-    const auto result = run_viterbi(active_forward(cpp_floor), row, std::array{row, row, row, row}, {row, row});
-    EXPECT_EQ(result.path[1], (PathRow{HMMState::B, HMMState::B, HMMState::B, HMMState::B}));
+    for_each_compiled_backend([&]<SimdLevel Backend>() {
+        const auto result =
+            run_viterbi(backend_forward<Backend>(cpp_floor), row, std::array{row, row, row, row}, {row, row});
+        EXPECT_EQ(result.path[1], (PathRow{HMMState::B, HMMState::B, HMMState::B, HMMState::B})) << level_name(Backend);
+    });
 }
 
 // From B every candidate is -0.0 and from E +0.0; they compare equal, so B, the earlier one, keeps its -0.0 score.
@@ -247,44 +299,62 @@ TEST(SimdTest, ViterbiKeepsTheEarlierScoreWhenSignedZerosTie) {
     const auto from_e = StateScores{0.0, 0.0, 0.0, 0.0};
     const auto from_other = StateScores{-1.0, -1.0, -1.0, -1.0};
     const auto emit = StateScores{-0.0, -0.0, -0.0, -0.0};
-    const auto result =
-        run_viterbi(active_forward(cpp_floor), start, std::array{from_b, from_e, from_other, from_other}, {emit, emit});
     const auto negative_zero = std::bit_cast<std::uint64_t>(-0.0);
-    EXPECT_EQ(result.path[1], (PathRow{HMMState::B, HMMState::B, HMMState::B, HMMState::B}));
-    EXPECT_EQ(result.weight_bits, (std::array{negative_zero, negative_zero, negative_zero, negative_zero}));
+    for_each_compiled_backend([&]<SimdLevel Backend>() {
+        SCOPED_TRACE(level_name(Backend));
+        const auto result = run_viterbi(backend_forward<Backend>(cpp_floor), start,
+                                        std::array{from_b, from_e, from_other, from_other}, {emit, emit});
+        EXPECT_EQ(result.path[1], (PathRow{HMMState::B, HMMState::B, HMMState::B, HMMState::B}));
+        EXPECT_EQ(result.weight_bits, (std::array{negative_zero, negative_zero, negative_zero, negative_zero}));
+    });
 }
 
 TEST(SimdTest, ViterbiOverOneColumnReturnsTheStartWeightsAndWritesNoRow) {
     const auto start = StateScores{-1.0, -0.0, 0.0, -2.0};
     const auto row = StateScores{-1.0, -1.0, -1.0, -1.0};
-    const auto result = run_viterbi(active_forward(cpp_floor), start, std::array{row, row, row, row}, {row});
-    EXPECT_EQ(result.path[0], (PathRow{HMMState::S, HMMState::S, HMMState::S, HMMState::S}));
-    EXPECT_EQ(result.weight_bits, (std::array{std::bit_cast<std::uint64_t>(-1.0), std::bit_cast<std::uint64_t>(-0.0),
-                                              std::bit_cast<std::uint64_t>(0.0), std::bit_cast<std::uint64_t>(-2.0)}));
+    for_each_compiled_backend([&]<SimdLevel Backend>() {
+        SCOPED_TRACE(level_name(Backend));
+        const auto result =
+            run_viterbi(backend_forward<Backend>(cpp_floor), start, std::array{row, row, row, row}, {row});
+        EXPECT_EQ(result.path[0], (PathRow{HMMState::S, HMMState::S, HMMState::S, HMMState::S}));
+        EXPECT_EQ(result.weight_bits,
+                  (std::array{std::bit_cast<std::uint64_t>(-1.0), std::bit_cast<std::uint64_t>(-0.0),
+                              std::bit_cast<std::uint64_t>(0.0), std::bit_cast<std::uint64_t>(-2.0)}));
+    });
 }
 
 TEST(SimdTest, ViterbiLegalAgreesWithScalarOnRandomColumns) {
     auto engine = std::mt19937{20261105};
     for (auto trial = 0; trial < 2000; ++trial) {
         const auto input = random_input(engine);
-        ASSERT_EQ(run_viterbi(active_legal_forward, input.start, input.transitions, input.emissions),
-                  run_viterbi(scalar_legal_forward, input.start, input.transitions, input.emissions))
-            << "trial " << trial;
+        const auto expected = run_viterbi(scalar_legal_forward, input.start, input.transitions, input.emissions);
+        for_each_compiled_backend([&]<SimdLevel Backend>() {
+            EXPECT_EQ(run_viterbi(backend_legal_forward<Backend>(), input.start, input.transitions, input.emissions),
+                      expected)
+                << level_name(Backend) << ", trial " << trial;
+        });
     }
 }
 
 TEST(SimdTest, ViterbiLegalTakesTheLaterPredecessorOnTies) {
     const auto row = StateScores{-1.0, -1.0, -1.0, -1.0};
-    const auto result = run_viterbi(active_legal_forward, row, std::array{row, row, row, row}, {row, row});
-    EXPECT_EQ(result.path[1], (PathRow{HMMState::S, HMMState::M, HMMState::M, HMMState::S}));
+    for_each_compiled_backend([&]<SimdLevel Backend>() {
+        const auto result =
+            run_viterbi(backend_legal_forward<Backend>(), row, std::array{row, row, row, row}, {row, row});
+        EXPECT_EQ(result.path[1], (PathRow{HMMState::S, HMMState::M, HMMState::M, HMMState::S})) << level_name(Backend);
+    });
 }
 
 // Earlier predecessors (E for B and S, B for E and M) score +0.0 and later ones -0.0; the later -0.0 is kept.
 TEST(SimdTest, ViterbiLegalKeepsTheLaterScoreWhenSignedZerosTie) {
     const auto start = StateScores{0.0, 0.0, -0.0, -0.0};
     const auto row = StateScores{-0.0, -0.0, -0.0, -0.0};
-    const auto result = run_viterbi(active_legal_forward, start, std::array{row, row, row, row}, {row, row});
     const auto negative_zero = std::bit_cast<std::uint64_t>(-0.0);
-    EXPECT_EQ(result.path[1], (PathRow{HMMState::S, HMMState::M, HMMState::M, HMMState::S}));
-    EXPECT_EQ(result.weight_bits, (std::array{negative_zero, negative_zero, negative_zero, negative_zero}));
+    for_each_compiled_backend([&]<SimdLevel Backend>() {
+        SCOPED_TRACE(level_name(Backend));
+        const auto result =
+            run_viterbi(backend_legal_forward<Backend>(), start, std::array{row, row, row, row}, {row, row});
+        EXPECT_EQ(result.path[1], (PathRow{HMMState::S, HMMState::M, HMMState::M, HMMState::S}));
+        EXPECT_EQ(result.weight_bits, (std::array{negative_zero, negative_zero, negative_zero, negative_zero}));
+    });
 }

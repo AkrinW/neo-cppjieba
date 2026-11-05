@@ -11,10 +11,9 @@
 | --- | --- |
 | Linux x64 / ARM64 | GCC 16 |
 | macOS ARM64 | Homebrew LLVM 23 / libc++ |
-| Windows x64 | Visual Studio 2026 |
+| Windows x64 / ARM64 | Visual Studio 2026 |
 
-编译器选择和平台运行库参数见 [Linux](../.github/workflows/cmake.yml)、
-[macOS / Windows](../.github/workflows/platforms.yml) 和 [C API](../.github/workflows/c-api.yml) 的配置。
+编译器选择和平台运行库参数见 [CMake 工作流](../.github/workflows/cmake.yml)的配置。
 下列构建命令从仓库根目录执行；应用消费端命令从应用项目根目录执行。
 
 ## 源码接入
@@ -93,8 +92,10 @@ target_link_libraries(my_app PRIVATE neo_cppjieba::icu)
   C ABI 库同样随所选级别编译，分发给他人的二进制宜保持 `OFF` 或基线级别。
 - 不经 CMake 集成时，自行定义 `CPPJIEBA_SIMD_SSE2`、`CPPJIEBA_SIMD_AVX2`、`CPPJIEBA_SIMD_NEON` 之一并加上对应编译选项；
   宏与目标架构或编译选项不符时，`neo/simd/SimdLevel.hpp` 在编译期报错。
-- 按级别切换实现的内核有分隔符扫描和 HMM Viterbi（CPP 与 Python/Rust 两种规则各一个）：`SSE2` 和 `AVX2`
-  各有向量版本，`NEON` 暂用标量；其余各项见 [ROADMAP](../ROADMAP.md#分词吞吐simd)。2026-11 在 i5-12500 上，
+- 一个级别同时编译标量实现和同一指令集族中更低的级别：`AVX2` 构建也编译 `SSE2` 内核。库只调用所选级别的内核，
+  其余内核是未实例化的模板，不进入目标代码；单元测试和 `simd_kernels` fuzz 目标逐个把它们与标量实现比较。
+- 按级别切换实现的内核有分隔符扫描和 HMM Viterbi（CPP 与 Python/Rust 两种规则各一个）：`SSE2`、`AVX2`
+  和 `NEON` 各有向量版本；其余各项见 [ROADMAP](../ROADMAP.md#分词吞吐simd)。2026-11 在 i5-12500 上，
   分隔符扫描让各模式快约 3%–4%，但 `-mavx2` 本身让其余代码慢约 1.5%–2%；CPP 规则的 Viterbi 内核另让 MIX 和
   SEARCH 在 `AVX2` 下快约 3%–4%、`SSE2` 下快约 1%–2%，HMM 模式快约 15%–24%；Python/Rust 规则的内核让 HMM 模式
   快约 24%–28%，MIX 快约 1%–2%。合计起来，MIX 上两级相当，SEARCH 和 HMM 模式 `AVX2` 更快。
@@ -129,9 +130,9 @@ ctest --test-dir build-tests -C Debug --output-on-failure
 GoogleTest 按父项目目标、本地安装、源码下载的顺序查找；使用已有安装时设置 `GTest_DIR` 或 `CMAKE_PREFIX_PATH`。
 单元测试覆盖分词、编码、输出契约和容量变体，安装消费端测试检查包导出及可选组件。
 `CPPJIEBA_SIMD=OFF` 时，本机能执行的每个 SIMD 级别另有一个 `neo_simd_<级别>` 测试。
-CI 另以 SIMD 级别运行全部测试：Linux x64 为 `AVX2`（Debug、Release）和 `SSE2`（Release），
-Linux ARM64 为 `NEON`（GCC，Debug、Release），Windows x64 为 `AVX2`，Windows ARM64 为 `NEON`（MSVC，Debug、Release），
-macOS 为 `NEON`（Release）。
+CI 在每个平台上各运行一个 Debug 和一个 Release 任务，均启用 C API、示例和 benchmark：Debug 使用该平台的最高 SIMD 级别
+（x64 为 `AVX2`，同时测试 `SSE2` 内核；ARM64 为 `NEON`），Release 使用 `OFF` 并产出 C API 包。Linux x64 只有
+Release 任务，另含 legacy 测试；它的 Debug 构建由 Quality 工作流的各项检查承担，其中 ASan + UBSan 以 `AVX2` 运行。
 GCC 构建另有 `neo_inline_hot_paths`，检查逐字符热点函数在内联预算耗尽时仍被内联。
 启用 ICU 或 C API 后，CTest 增加相应的验证。性能测量命令见 [benchmark 指南](../benchmark/README.md)。
 
@@ -179,11 +180,11 @@ LLVM 23 来自 apt.llvm.org，软件源由 `tools/add-llvm-apt-source.sh` 添加
   `-jobs` 为每个目标并行运行 n 个 fuzz 进程，各进程共享工作语料，日志写入 `<构建目录>/fuzz-run/logs/<目标>/`。
   `-fork` 在 apt.llvm.org 的构建中合并子任务结果时会崩溃（[llvm#201274](https://github.com/llvm/llvm-project/issues/201274)），
   脚本不使用它。`FUZZ_MINIMIZE=1` 或 `FUZZ_JOBS` 大于 1 时，每个目标结束后把工作语料合并为带来覆盖的输入。
-- Quality 工作流对每个目标 fuzz 30 秒，从缓存的语料出发；PR 只读取缓存，master 的推送精简后保存。
+- Quality 工作流以 `CPPJIEBA_SIMD=AVX2` 构建，对每个目标 fuzz 30 秒，从缓存的语料出发；PR 只读取缓存，master 的推送精简后保存。
   [Nightly fuzz 工作流](../.github/workflows/fuzz-nightly.yml)每天为每个目标开一个任务，以 4 个进程 fuzz 10 分钟，
   再把各目标精简后的语料合并存入同一缓存；手动触发时可指定每个目标的秒数。
-- Quality 工作流另以 `CPPJIEBA_SIMD=AVX2` 构建并 fuzz 全部目标，只读取语料缓存。`simd_kernels` 把构建所选的分隔符扫描和
-  两种 Viterbi 内核与标量参考逐位比较，`OFF` 构建中二者是同一实现；nightly 任务因此以 `AVX2` 构建这个目标。
+- `simd_kernels` 把构建编译的每个分隔符扫描和两种 Viterbi 内核与标量参考逐位比较，`AVX2` 构建同时比较 `SSE2` 内核，
+  `OFF` 构建中二者是同一实现；nightly 任务因此以 `AVX2` 构建这个目标，其余目标保持 `OFF`。
 - 覆盖率脚本把 `summary.md` 写入输出目录，CI 将它发布为 job summary：总计、各目录和覆盖最少的文件按行和分支统计，
   任一测试程序或模板实例到达即算覆盖。llvm-cov 把返回语句之后不可达的块尾（如 `case` 末尾的 `}`）记为 0，
   因此只含右花括号的行在其前一可执行行被覆盖时计为覆盖。设置 `COVERAGE_BASE=<修订>` 时另列相对该修订改动行的覆盖，

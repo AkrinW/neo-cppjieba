@@ -3,6 +3,8 @@
 
 Each round runs every build once in a rotated order, plus the OFF build a second time, so each SIMD/OFF ratio is
 paired with an OFF run from the same round and the report shows this machine's own OFF-versus-OFF noise beside it.
+The min statistic suits runners whose whole runs slow down at random: interference only adds time, so the fastest
+repetition over all rounds is the most repeatable estimate of each build.
 """
 
 import argparse
@@ -21,6 +23,8 @@ MODES = ("MIX", "MP", "FULL", "SEARCH", "HMM")
 OUTPUTS = ("strings", "borrowed", "reused")
 FINGERPRINT_SUFFIXES = ("/tokens", "/ranges_fnv1a64")
 UNIT_MS = {"ns": 1e-6, "us": 1e-3, "ms": 1.0, "s": 1e3}
+# How one run's repetitions reduce to one time.
+STATISTICS = {"median": statistics.median, "min": min}
 
 
 def parse_variant(value):
@@ -68,8 +72,8 @@ def benchmark_key(name):
     return (len(MODES), 0, name)
 
 
-def iteration_medians(report):
-    """Median real time in milliseconds of each benchmark's repetitions; a benchmark error aborts the comparison."""
+def iteration_times(report):
+    """Real time in milliseconds of each benchmark's repetitions; a benchmark error aborts the comparison."""
     times = {}
     for entry in report["benchmarks"]:
         if entry.get("error_occurred"):
@@ -80,7 +84,7 @@ def iteration_medians(report):
         times.setdefault(name, []).append(entry["real_time"] * UNIT_MS[entry["time_unit"]])
     if not times:
         raise RuntimeError("the report contains no benchmark iterations")
-    return {name: statistics.median(values) for name, values in times.items()}
+    return times
 
 
 def output_fingerprint(report):
@@ -104,7 +108,7 @@ def check_report(level, report, reference):
 
 
 def collect(levels, run_build, rounds):
-    """Run each level once per round in rotated order, OFF twice; return per-round medians and the fingerprint.
+    """Run each level once per round in rotated order, OFF twice; return per-round repetition times and the fingerprint.
 
     run_build(level, run_index) runs one build and returns its Google Benchmark report.
     """
@@ -113,33 +117,48 @@ def collect(levels, run_build, rounds):
     fingerprint = None
     run_index = 0
     for round_index in range(rounds):
-        medians = {}
+        times = {}
         for label in round_order(labels, round_index):
             level = BASELINE if label == NOISE else label
             report = run_build(level, run_index)
             run_index += 1
             fingerprint = check_report(level, report, fingerprint)
-            medians[label] = iteration_medians(report)
-        measured.append(medians)
+            times[label] = iteration_times(report)
+        measured.append(times)
     return measured, fingerprint
 
 
-def ratio_summary(ratios):
-    """Median and range of per-round ratios."""
-    return {"median": statistics.median(ratios), "min": min(ratios), "max": max(ratios)}
+def round_times(measured, label, name, statistic):
+    """One reduced time per round for a label's benchmark."""
+    reduce = STATISTICS[statistic]
+    return [reduce(times[label][name]) for times in measured]
 
 
-def summarize(measured, levels):
-    """Per benchmark: OFF median time and, for each other level and A/A, ratios to the same round's OFF run."""
+def fastest_time(measured, label, name):
+    """The fastest repetition of a label's benchmark over all rounds."""
+    return min(sample for times in measured for sample in times[label][name])
+
+
+def summarize(measured, levels, statistic):
+    """Per benchmark: the OFF time and, for each other level and A/A, its time ratio to OFF.
+
+    [min, max] spans the per-round ratios of each run's reduced repetitions. The OFF time and the center are the
+    median over rounds for the median statistic, and come from each label's fastest repetition for the min statistic.
+    """
     names = sorted(measured[0][BASELINE], key=benchmark_key)
     rows = {}
     for name in names:
-        baseline = [medians[BASELINE][name] for medians in measured]
-        rows[name] = {
-            "off_ms": statistics.median(baseline),
-            "ratios": {label: ratio_summary([medians[label][name] / medians[BASELINE][name] for medians in measured])
-                       for label in levels[1:] + [NOISE]},
-        }
+        baseline = round_times(measured, BASELINE, name, statistic)
+        ratios = {}
+        for label in levels[1:] + [NOISE]:
+            per_round = [time / off for time, off in zip(round_times(measured, label, name, statistic), baseline)]
+            if statistic == "min":
+                center = fastest_time(measured, label, name) / fastest_time(measured, BASELINE, name)
+            else:
+                center = statistics.median(per_round)
+            ratios[label] = {"center": center, "min": min(per_round), "max": max(per_round)}
+        off_ms = fastest_time(measured, BASELINE, name) if statistic == "min" else statistics.median(baseline)
+        rows[name] = {"off_ms": off_ms, "ratios": ratios}
     return rows
 
 
@@ -153,10 +172,18 @@ def verdict(ratio, noise):
 
 
 def format_change(ratio):
-    """Median time change with the per-round range, in percent; negative is faster."""
+    """Central time change with the per-round range, in percent; negative is faster."""
     def percent(value):
         return f"{(value - 1) * 100:+.1f}"
-    return f"{percent(ratio['median'])}% [{percent(ratio['min'])}, {percent(ratio['max'])}]"
+    return f"{percent(ratio['center'])}% [{percent(ratio['min'])}, {percent(ratio['max'])}]"
+
+
+def statistic_description(statistic):
+    """How the table's numbers were computed, for the section header."""
+    if statistic == "min":
+        return ("Each SIMD column is the time change of the fastest repetition over all rounds against OFF's, "
+                "[min, max] over rounds of the same ratio within each round;")
+    return "Each SIMD column is the time change against the OFF run of the same round, median [min, max] over rounds;"
 
 
 def format_markdown(title, settings, levels, rows):
@@ -166,7 +193,7 @@ def format_markdown(title, settings, levels, rows):
         f"### {title}",
         "",
         f"{settings['text']}, {settings['rounds']} rounds × {settings['repetitions']} repetitions. "
-        f"Each SIMD column is the time change against the OFF run of the same round, median [min, max] over rounds; "
+        f"{statistic_description(settings['statistic'])} "
         f"{NOISE} is a second OFF run, the noise on this machine. "
         f"**Bold**: every round lies outside the {NOISE} range.",
         "",
@@ -228,9 +255,11 @@ def parse_arguments():
     parser.add_argument("--repetitions", type=positive_count, default=3,
                         help="Google Benchmark repetitions per run (default 3)")
     parser.add_argument("--min-time", default="0.2s", help="--benchmark_min_time per repetition (default 0.2s)")
+    parser.add_argument("--statistic", choices=tuple(STATISTICS), default="median",
+                        help="reduce repetitions by their median, or compare the fastest ones (default median)")
     parser.add_argument("--title", required=True, help="Markdown heading, such as the platform and compiler")
     parser.add_argument("--markdown", type=Path, help="write the Markdown section here")
-    parser.add_argument("--json", type=Path, help="write the summary and per-round medians here")
+    parser.add_argument("--json", type=Path, help="write the summary and per-round repetition times here")
     return parser.parse_args()
 
 
@@ -238,7 +267,7 @@ def run():
     """Measure, check and report; returns the process exit status."""
     arguments = parse_arguments()
     settings = {"text": arguments.text.name, "rounds": arguments.rounds, "repetitions": arguments.repetitions,
-                "min_time": arguments.min_time}
+                "min_time": arguments.min_time, "statistic": arguments.statistic}
     try:
         levels = variant_levels(arguments.variant)
         executables = dict(arguments.variant)
@@ -254,7 +283,7 @@ def run():
         write_outputs(arguments, format_failure(arguments.title, error), failure)
         print(error, file=sys.stderr)
         return 1
-    rows = summarize(measured, levels)
+    rows = summarize(measured, levels, arguments.statistic)
     markdown = format_markdown(arguments.title, settings, levels, rows)
     write_outputs(arguments, markdown, {"title": arguments.title, "settings": settings, "levels": levels,
                                         "benchmarks": rows, "fingerprint": fingerprint, "rounds": measured})
