@@ -31,7 +31,8 @@ struct TextRankOptions {
 namespace detail {
 
 // Option values supplied by callers are configuration errors, not internal invariants.
-inline auto check_text_rank_options(const TextRankOptions &options) -> void {
+inline
+auto check_text_rank_options(const TextRankOptions &options) -> void {
     check(options.damping >= 0.0 && options.damping <= 1.0, "TextRankExtractor: damping {} is outside [0, 1]",
           options.damping);
 }

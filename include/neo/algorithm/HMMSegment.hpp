@@ -24,8 +24,9 @@ namespace neo_cppjieba::detail {
 
 /// Run the Viterbi algorithm on runes[begin..end) and emit each word with global offset pos.
 template <WordEmitter Emit>
-inline auto hmm_internal_cut(const HMModel &model, std::span<const Rune> runes, RuneIndex begin, RuneIndex end,
-                             RuneIndex pos, const Emit &emit_word, SegmentScratch &scratch) -> void {
+inline
+auto hmm_internal_cut(const HMModel &model, std::span<const Rune> runes, RuneIndex begin, RuneIndex end, RuneIndex pos,
+                      const Emit &emit_word, SegmentScratch &scratch) -> void {
     assert_check([&] { return begin < end && end <= runes.size(); }, "HMMSegment: invalid Viterbi rune range");
     assert_check([&] { return runes.size() <= static_cast<RuneIndex>(std::numeric_limits<RuneIndex>::max() - pos); },
                  "HMMSegment: global word offsets overflow");
@@ -115,9 +116,8 @@ inline auto hmm_internal_cut(const HMModel &model, std::span<const Rune> runes, 
 
 /// Find the end position of a consecutive ASCII letter sequence starting at `begin`.
 /// Returns `begin` if runes[begin] is not a letter.
-[[nodiscard]]
-constexpr auto sequential_letter_end(std::span<const Rune> runes, RuneIndex begin, RuneIndex end) noexcept
-    -> RuneIndex {
+[[nodiscard]] constexpr
+auto sequential_letter_end(std::span<const Rune> runes, RuneIndex begin, RuneIndex end) noexcept -> RuneIndex {
     assert_check([&] { return begin < end && end <= runes.size(); }, "HMMSegment: invalid ASCII letter range");
     auto r = runes[to_index(begin)];
     if (('a' > r || r > 'z') && ('A' > r || r > 'Z')) {
@@ -137,8 +137,8 @@ constexpr auto sequential_letter_end(std::span<const Rune> runes, RuneIndex begi
 
 /// Find the end position of a consecutive number sequence starting at `begin`.
 /// Returns `begin` if runes[begin] is not a digit.
-[[nodiscard]]
-constexpr auto number_end(std::span<const Rune> runes, RuneIndex begin, RuneIndex end) noexcept -> RuneIndex {
+[[nodiscard]] constexpr
+auto number_end(std::span<const Rune> runes, RuneIndex begin, RuneIndex end) noexcept -> RuneIndex {
     assert_check([&] { return begin < end && end <= runes.size(); }, "HMMSegment: invalid ASCII number range");
     auto r = runes[to_index(begin)];
     if ('0' > r || r > '9') {
@@ -158,7 +158,8 @@ constexpr auto number_end(std::span<const Rune> runes, RuneIndex begin, RuneInde
 
 // Emit the reference HMM's alternating alphanumeric matches and non-Chinese gaps.
 template <WordEmitter Emit>
-inline auto style_hmm_emit_non_han(std::span<const Rune> runes, RuneIndex pos, const Emit &emit_word) -> void {
+inline
+auto style_hmm_emit_non_han(std::span<const Rune> runes, RuneIndex pos, const Emit &emit_word) -> void {
     auto begin = RuneIndex{0};
     while (begin < runes.size()) {
         auto end = begin;
@@ -176,8 +177,9 @@ inline auto style_hmm_emit_non_han(std::span<const Rune> runes, RuneIndex pos, c
 
 // Isolate the reference HMM's Han blocks before running Viterbi, preserving source order.
 template <WordEmitter Emit>
-inline auto style_hmm_emit(const HMModel &model, std::span<const Rune> runes, RuneIndex pos, const Emit &emit_word,
-                           SegmentScratch &scratch) -> void {
+inline
+auto style_hmm_emit(const HMModel &model, std::span<const Rune> runes, RuneIndex pos, const Emit &emit_word,
+                    SegmentScratch &scratch) -> void {
     auto begin = RuneIndex{0};
     while (begin < runes.size()) {
         const auto han = is_hmm_han(runes[to_index(begin)]);
@@ -198,8 +200,9 @@ inline auto style_hmm_emit(const HMModel &model, std::span<const Rune> runes, Ru
 
 /// Append HMM segmentation results for a separator-free segment, preserving ASCII runs as whole tokens.
 template <WordEmitter Emit>
-inline auto hmm_emit_one_segment(const HMModel &model, std::span<const Rune> runes, RuneIndex pos,
-                                 const Emit &emit_word, SegmentScratch &scratch) -> void {
+inline
+auto hmm_emit_one_segment(const HMModel &model, std::span<const Rune> runes, RuneIndex pos, const Emit &emit_word,
+                          SegmentScratch &scratch) -> void {
     assert_check([&] { return runes.size() <= static_cast<RuneIndex>(std::numeric_limits<RuneIndex>::max() - pos); },
                  "HMMSegment: global word offsets overflow");
     if (runes.empty()) {
@@ -255,8 +258,9 @@ inline auto hmm_emit_one_segment(const HMModel &model, std::span<const Rune> run
 }
 
 /// Append emitted HMM words to a caller-owned vector without changing its existing prefix.
-inline auto hmm_cut_one_segment(const HMModel &model, std::span<const Rune> runes, RuneIndex pos,
-                                std::vector<WordRange> &range, SegmentScratch &scratch) -> void {
+inline
+auto hmm_cut_one_segment(const HMModel &model, std::span<const Rune> runes, RuneIndex pos,
+                         std::vector<WordRange> &range, SegmentScratch &scratch) -> void {
     const auto emit_word = [&](WordRange word) {
         range.push_back(word);
     };
@@ -264,8 +268,9 @@ inline auto hmm_cut_one_segment(const HMModel &model, std::span<const Rune> rune
 }
 
 /// Append HMM segmentation results; the CPP style also keeps separator runes as standalone tokens.
-inline auto hmm_cut_append(const HMModel &model, std::span<const Rune> runes, RuneIndex pos,
-                           std::vector<WordRange> &range, SegmentScratch &scratch) -> void {
+inline
+auto hmm_cut_append(const HMModel &model, std::span<const Rune> runes, RuneIndex pos, std::vector<WordRange> &range,
+                    SegmentScratch &scratch) -> void {
     assert_check([&] { return runes.size() <= static_cast<RuneIndex>(std::numeric_limits<RuneIndex>::max() - pos); },
                  "HMMSegment: global word offsets overflow");
     if constexpr (compile_config::segmentation_style != SegmentationStyle::CPP) {
@@ -297,8 +302,9 @@ inline auto hmm_cut_append(const HMModel &model, std::span<const Rune> runes, Ru
 /// model. The HMModel is taken as a const reference parameter; the dictionary is unused.
 struct HMMSegment {
     // Replace output and reuse predecessor storage across HMM runs and calls.
-    static auto cut_into(const DictTrie &, const HMModel &model, std::span<const Rune> runes,
-                         std::vector<WordRange> &range, detail::SegmentScratch &scratch) -> void {
+    static
+    auto cut_into(const DictTrie &, const HMModel &model, std::span<const Rune> runes, std::vector<WordRange> &range,
+                  detail::SegmentScratch &scratch) -> void {
         assert_check([&] { return detail::size_fits_capacity<RuneIndex>(runes.size()); },
                      "HMMSegment: input exceeds the word-range limit");
         range.clear();

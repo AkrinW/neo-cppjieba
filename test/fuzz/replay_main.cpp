@@ -10,7 +10,8 @@
 #include <vector>
 
 // Each harness defines the libFuzzer entry point; this driver calls it once per input.
-extern "C" auto LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size) -> int;
+extern
+"C" auto LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size) -> int;
 
 namespace {
 

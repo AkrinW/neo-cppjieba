@@ -29,8 +29,8 @@ namespace scalar {
 /// result; it also serves OFF builds unchanged. runes.size() must fit RuneIndex.
 template <typename IsMatch>
     requires std::predicate<const IsMatch &, char32_t>
-inline auto append_matches(std::span<const char32_t> runes, const IsMatch &is_match, std::vector<RuneIndex> &out)
-    -> void {
+inline
+auto append_matches(std::span<const char32_t> runes, const IsMatch &is_match, std::vector<RuneIndex> &out) -> void {
     auto n = static_cast<RuneIndex>(runes.size());
     for (auto i = RuneIndex{0}; i < n; ++i) {
         if (is_match(runes[to_index(i)])) {
@@ -47,8 +47,9 @@ inline constexpr auto match_block_size = std::size_t{32};
 /// Append the index of each set bit that block_mask reports for whole blocks, then classify the tail with is_match.
 /// One mask per 32 runes keeps the loop-exit misprediction to about one per block instead of one per match.
 template <typename BlockMask, typename IsMatch>
-inline auto append_block_matches(std::span<const char32_t> runes, const BlockMask &block_mask, const IsMatch &is_match,
-                                 std::vector<RuneIndex> &out) -> void {
+inline
+auto append_block_matches(std::span<const char32_t> runes, const BlockMask &block_mask, const IsMatch &is_match,
+                          std::vector<RuneIndex> &out) -> void {
     auto base = std::size_t{0};
     for (; runes.size() - base >= match_block_size; base += match_block_size) {
         const auto block = runes.subspan(base).first<match_block_size>();
@@ -74,9 +75,9 @@ template <>
 struct RuneMatchKernel<SimdLevel::SSE2> {
     /// Return a mask whose bit k is set when block[k] equals one of needles, comparing 4 runes per step.
     template <std::size_t N>
-    [[nodiscard]]
-    static auto block_mask(std::span<const char32_t, match_block_size> block,
-                           const std::array<char32_t, N> &needles) noexcept -> std::uint32_t {
+    [[nodiscard]] static
+    auto block_mask(std::span<const char32_t, match_block_size> block, const std::array<char32_t, N> &needles) noexcept
+        -> std::uint32_t {
         constexpr auto lanes = std::size_t{4};
         auto mask = std::uint32_t{0};
         for (auto offset = std::size_t{0}; offset < match_block_size; offset += lanes) {
@@ -97,9 +98,9 @@ template <>
 struct RuneMatchKernel<SimdLevel::AVX2> {
     /// Return a mask whose bit k is set when block[k] equals one of needles, comparing 8 runes per step.
     template <std::size_t N>
-    [[nodiscard]]
-    static auto block_mask(std::span<const char32_t, match_block_size> block,
-                           const std::array<char32_t, N> &needles) noexcept -> std::uint32_t {
+    [[nodiscard]] static
+    auto block_mask(std::span<const char32_t, match_block_size> block, const std::array<char32_t, N> &needles) noexcept
+        -> std::uint32_t {
         constexpr auto lanes = std::size_t{8};
         auto mask = std::uint32_t{0};
         for (auto offset = std::size_t{0}; offset < match_block_size; offset += lanes) {
@@ -121,9 +122,9 @@ struct RuneMatchKernel<SimdLevel::NEON> {
     /// Return a mask whose bit k is set when block[k] equals one of needles, comparing 8 runes narrowed to 16 bits per
     /// step. NEON has no movemask: one byte per rune is weighted, and three pairwise additions gather 8 runes per byte.
     template <std::size_t N>
-    [[nodiscard]]
-    static auto block_mask(std::span<const char32_t, match_block_size> block,
-                           const std::array<char32_t, N> &needles) noexcept -> std::uint32_t {
+    [[nodiscard]] static
+    auto block_mask(std::span<const char32_t, match_block_size> block, const std::array<char32_t, N> &needles) noexcept
+        -> std::uint32_t {
         const auto *runes = block.data();
         const auto first = vmovn_high_u16(vmovn_u16(match_8_runes(runes, needles)), match_8_runes(runes + 8, needles));
         const auto second =
@@ -145,8 +146,8 @@ private:
     /// maps every rune above U+FFFF to 0xFFFF, which matches no needle because append_matches requires needles below
     /// it.
     template <std::size_t N>
-    [[nodiscard]]
-    static auto match_8_runes(const char32_t *runes, const std::array<char32_t, N> &needles) noexcept -> uint16x8_t {
+    [[nodiscard]] static
+    auto match_8_runes(const char32_t *runes, const std::array<char32_t, N> &needles) noexcept -> uint16x8_t {
         const auto low = vld1q_u32(reinterpret_cast<const std::uint32_t *>(runes));
         const auto high = vld1q_u32(reinterpret_cast<const std::uint32_t *>(runes + 4));
         const auto narrow = vqmovn_high_u32(vqmovn_u32(low), high);
@@ -165,8 +166,9 @@ private:
 /// saturates wider runes to.
 template <SimdLevel Backend, std::size_t N, typename IsMatch>
     requires std::predicate<const IsMatch &, char32_t>
-inline auto append_matches(std::span<const char32_t> runes, const std::array<char32_t, N> &needles,
-                           const IsMatch &is_match, std::vector<RuneIndex> &out) -> void {
+inline
+auto append_matches(std::span<const char32_t> runes, const std::array<char32_t, N> &needles, const IsMatch &is_match,
+                    std::vector<RuneIndex> &out) -> void {
     static_assert(is_compiled_backend(Backend), "simd::append_matches: this build does not compile the backend");
     assert_check([&] { return size_fits_capacity<RuneIndex>(runes.size()); },
                  "simd::append_matches: {} runes exceed the RuneIndex range", runes.size());

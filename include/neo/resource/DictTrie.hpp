@@ -64,8 +64,8 @@ struct LevelOrderDict {
 
 // Describe the first violation of the invariants DictTrie relies on when building from a level-order dictionary,
 // or return an empty view. Snapshot decoding reports it as invalid data.
-[[nodiscard]]
-inline auto level_order_dict_error(const LevelOrderDict &dict) -> std::string_view {
+[[nodiscard]] inline
+auto level_order_dict_error(const LevelOrderDict &dict) -> std::string_view {
     const auto &stats = dict.stats;
     if (stats.min <= 0 || stats.min > stats.median || stats.median > stats.max || stats.max > stats.sum) {
         return "frequency statistics are inconsistent";
@@ -130,9 +130,9 @@ public:
 
     /// Parse text sources with the rules construction applies, into the canonical layout snapshots store.
     /// Equal words keep their last entry, as construction does.
-    [[nodiscard]]
-    static auto level_order(const DictSource &dict, std::span<const DictSource> user_dicts,
-                            UserWordWeightOption user_word_weight_opt) -> LevelOrderDict {
+    [[nodiscard]] static
+    auto level_order(const DictSource &dict, std::span<const DictSource> user_dicts,
+                     UserWordWeightOption user_word_weight_opt) -> LevelOrderDict {
         check_user_word_weight_option(user_word_weight_opt);
         auto parsed = parse_sources(dict, user_dicts);
         auto entries = sorted_last_entries(std::move(parsed.entries));
@@ -278,8 +278,8 @@ private:
 
     // Sort entries by word; the stable sort keeps load order among equal words, so keeping the last of each run
     // applies the precedence Trie::build gives duplicates.
-    [[nodiscard]]
-    static auto sorted_last_entries(std::vector<RawEntry> entries) -> std::vector<RawEntry> {
+    [[nodiscard]] static
+    auto sorted_last_entries(std::vector<RawEntry> entries) -> std::vector<RawEntry> {
         std::ranges::stable_sort(entries, std::ranges::less{}, &RawEntry::word);
         auto last = std::vector<RawEntry>{};
         last.reserve(entries.size());
@@ -367,8 +367,8 @@ private:
     }
 
     // Phases 1–3 of the pipeline, shared with level_order() so snapshots apply the same parsing rules.
-    [[nodiscard]]
-    static auto parse_sources(const DictSource &dict, std::span<const DictSource> user_dicts) -> ParsedSources {
+    [[nodiscard]] static
+    auto parse_sources(const DictSource &dict, std::span<const DictSource> user_dicts) -> ParsedSources {
         auto parsed = ParsedSources{};
         auto &entries = parsed.entries;
 
@@ -416,8 +416,9 @@ private:
     // Each line has exactly 3 space-separated fields: "word freq tag"
     // e.g.  "AT&T 3 nz",  "我们 � r"
 
-    static auto load_main_dict(std::string_view text, std::string_view path, std::vector<RawEntry> &entries,
-                               std::vector<int> &freqs) -> void {
+    static
+    auto load_main_dict(std::string_view text, std::string_view path, std::vector<RawEntry> &entries,
+                        std::vector<int> &freqs) -> void {
         auto line = get_line_view(text);
         auto line_number = size_t{0};
 
@@ -461,8 +462,9 @@ private:
     ///   1 field  — "word"            → default weight, empty tag
     ///   2 fields — "word tag"        → default weight, explicit tag
     ///   3 fields — "word freq tag"   → weight from freq, explicit tag
-    static auto load_user_dict(std::string_view text, std::vector<RawEntry> &entries,
-                               gtl::flat_hash_set<Rune> &single_runes) -> void {
+    static
+    auto load_user_dict(std::string_view text, std::vector<RawEntry> &entries, gtl::flat_hash_set<Rune> &single_runes)
+        -> void {
         auto line = get_line_view(text);
         for (auto &&one_line : line) {
             if (one_line.empty()) {
@@ -472,8 +474,9 @@ private:
         }
     }
 
-    static auto parse_user_dict_line(std::string_view line, std::vector<RawEntry> &entries,
-                                     gtl::flat_hash_set<Rune> &single_runes) -> void {
+    static
+    auto parse_user_dict_line(std::string_view line, std::vector<RawEntry> &entries,
+                              gtl::flat_hash_set<Rune> &single_runes) -> void {
         auto sv = split_view{line, ' '};
         auto it = sv.begin();
         auto end = sv.end();

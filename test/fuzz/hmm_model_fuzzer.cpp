@@ -10,7 +10,8 @@
 using namespace neo_cppjieba;
 
 // Malformed HMM models must be rejected through the checked exception; internal assertions stay fatal.
-extern "C" auto LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size) -> int {
+extern
+"C" auto LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size) -> int {
     try {
         const auto model = detail::HMModel{DictSource::memory(as_text(data, size))};
         static_cast<void>(model);

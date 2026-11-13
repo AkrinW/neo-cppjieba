@@ -191,7 +191,8 @@ auto check_extraction(Ranker ranker, const KeywordRequest &request, neo_jieba_wo
 
 // The first byte orders the rankers and picks the diagnostic capacity; the request follows. Both rankers fill the
 // same workspace and keywords result, so the second extraction reuses storage the first one grew.
-extern "C" auto LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size) -> int {
+extern
+"C" auto LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size) -> int {
     auto reader = ByteReader{data, size};
     const auto flags = reader.byte();
     const auto request = decode_request(reader);

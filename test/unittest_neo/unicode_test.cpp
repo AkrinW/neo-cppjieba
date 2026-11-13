@@ -20,7 +20,8 @@ namespace {
 
 // Explicit UTF-8 octets keep byte tests independent of char signedness and the execution character set.
 template <ByteType ByteT>
-constexpr auto sample_utf8_bytes() -> std::array<ByteT, 12> {
+constexpr
+auto sample_utf8_bytes() -> std::array<ByteT, 12> {
     constexpr auto octets = std::array{0x41, 0x00, 0xC2, 0xA2, 0xE4, 0xB8, 0xAD, 0xF0, 0x9F, 0x98, 0x80, 0x00};
     auto result = std::array<ByteT, octets.size()>{};
     for (auto i = std::size_t{0}; i < octets.size(); ++i) {
@@ -134,7 +135,8 @@ namespace {
 
 // Compiler-produced UTF literals provide independent expectations for every character type.
 template <CharType CharT>
-constexpr auto sample_text() -> std::basic_string_view<CharT> {
+constexpr
+auto sample_text() -> std::basic_string_view<CharT> {
     if constexpr (std::same_as<CharT, char>) {
         return as_view("A\0中😀");
     } else if constexpr (std::same_as<CharT, char8_t>) {

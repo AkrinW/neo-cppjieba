@@ -14,7 +14,8 @@
 #include <vector>
 
 // Abort with a message so libFuzzer records the input that broke a harness property.
-inline auto require(bool condition, std::string_view property) -> void {
+inline
+auto require(bool condition, std::string_view property) -> void {
     if (!condition) {
         std::fprintf(stderr, "fuzz property violated: %.*s\n", static_cast<int>(property.size()), property.data());
         std::abort();
@@ -22,7 +23,8 @@ inline auto require(bool condition, std::string_view property) -> void {
 }
 
 // View fuzz bytes as UTF-8 text; libFuzzer keeps them alive for the whole callback.
-inline auto as_text(const std::uint8_t *data, std::size_t size) -> std::string_view {
+inline
+auto as_text(const std::uint8_t *data, std::size_t size) -> std::string_view {
     return size == 0 ? std::string_view{} : std::string_view{reinterpret_cast<const char *>(data), size};
 }
 
@@ -61,7 +63,8 @@ private:
 };
 
 // Split text at 0xFF bytes, which never occur in valid UTF-8, into at most max_parts parts; the last keeps the rest.
-inline auto split_parts(std::string_view text, std::size_t max_parts) -> std::vector<std::string_view> {
+inline
+auto split_parts(std::string_view text, std::size_t max_parts) -> std::vector<std::string_view> {
     auto parts = std::vector<std::string_view>{};
     while (parts.size() + 1 < max_parts) {
         const auto end = text.find('\xFF');

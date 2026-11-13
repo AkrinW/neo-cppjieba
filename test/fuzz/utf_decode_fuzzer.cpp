@@ -47,7 +47,8 @@ auto check_decoding(std::basic_string_view<CharT> input) -> void {
 
 } // namespace
 
-extern "C" auto LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size) -> int {
+extern
+"C" auto LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size) -> int {
     const auto bytes = std::span{data, size};
     check_decoding(as_text(data, size));
     check_decoding(std::u16string_view{code_units<char16_t>(bytes)});

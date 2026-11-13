@@ -79,8 +79,8 @@ struct LevelOrderKeys {
 
 // Build the level-order shape of nonempty, strictly ascending keys. Each node covers the sorted range of keys
 // longer than its depth that extend its prefix; a key equal to an edge's prefix sorts first and ends there.
-[[nodiscard]]
-inline auto level_order_keys(std::span<const Unicode> keys) -> LevelOrderKeys {
+[[nodiscard]] inline
+auto level_order_keys(std::span<const Unicode> keys) -> LevelOrderKeys {
     assert_check(
         [&] {
             return std::ranges::none_of(keys, [](const Unicode &key) { return key.empty(); })
@@ -121,8 +121,8 @@ inline auto level_order_keys(std::span<const Unicode> keys) -> LevelOrderKeys {
 }
 
 // Check one node's edges: Unicode scalar runes in strictly ascending order, each leading to a child or a value.
-[[nodiscard]]
-inline auto level_order_node_error(std::span<const LevelOrderEdge> edges) -> std::string_view {
+[[nodiscard]] inline
+auto level_order_node_error(std::span<const LevelOrderEdge> edges) -> std::string_view {
     if (edges.empty()) {
         return "a trie node has no edges";
     }
@@ -142,8 +142,8 @@ inline auto level_order_node_error(std::span<const LevelOrderEdge> edges) -> std
 
 // Describe the first violation of the level-order invariants Trie::build_level_order relies on, or return an
 // empty view. A node is reachable only if an edge of an earlier node leads to it, which also rules out cycles.
-[[nodiscard]]
-inline auto level_order_shape_error(const LevelOrderShape &shape) -> std::string_view {
+[[nodiscard]] inline
+auto level_order_shape_error(const LevelOrderShape &shape) -> std::string_view {
     const auto &[fanouts, edges] = shape;
     if (fanouts.empty()) {
         return "the trie has no root node";
@@ -216,16 +216,16 @@ class Trie {
     size_t node_count_{0};
 
     /// Keep all rune bits separate from the parent id; root transitions use parent id zero.
-    [[nodiscard]]
-    static constexpr auto transition_key(TrieNodeId parent, Rune rune) noexcept -> TransitionKey {
+    [[nodiscard]] static constexpr
+    auto transition_key(TrieNodeId parent, Rune rune) noexcept -> TransitionKey {
         assert_check([&] { return parent != kAbsentNode; }, "Trie: absent transition parent");
         return {parent, rune};
     }
 
     /// Two filter bits per rune, one in each 16-bit half; collisions only add a table lookup.
     /// Queries mask out the top bit, which selects compact or hashed child storage.
-    [[nodiscard]]
-    static constexpr auto child_bits(Rune rune) noexcept -> uint32_t {
+    [[nodiscard]] static constexpr
+    auto child_bits(Rune rune) noexcept -> uint32_t {
         const uint32_t hash = static_cast<uint32_t>(rune) * uint32_t{0x9E3779B1};
         return (uint32_t{1} << (hash >> 28)) | (uint32_t{1} << (16 + ((hash >> 24) & 15)));
     }
@@ -237,8 +237,8 @@ class Trie {
     // Each lookup is implemented once for Self = Trie or const Trie. Queries use the const find_* wrappers;
     // runtime edits use the explicitly named find_mutable_* wrappers.
     template <TrieSelf Self>
-    [[nodiscard]]
-    static auto root_in(Self &self, Rune rune) noexcept -> EntryOf<Self> * {
+    [[nodiscard]] static
+    auto root_in(Self &self, Rune rune) noexcept -> EntryOf<Self> * {
         assert_check([&] { return self.node_count_ > 0; }, "Trie: root lookup on an empty trie");
         if (rune < self.root_.size()) {
             auto &entry = self.root_[rune];
@@ -250,8 +250,8 @@ class Trie {
 
     // The filter tag selects storage without reserving any bits from the configured node id.
     template <TrieSelf Self>
-    [[nodiscard]]
-    static auto transition_in(Self &self, const Entry &parent, Rune rune) noexcept -> EntryOf<Self> * {
+    [[nodiscard]] static
+    auto transition_in(Self &self, const Entry &parent, Rune rune) noexcept -> EntryOf<Self> * {
         assert(parent.child > 0 && parent.child < self.node_count_);
         if ((parent.filter & kCompactFlag) != 0) {
             const auto id = static_cast<size_t>(parent.child);
@@ -266,8 +266,8 @@ class Trie {
     }
 
     template <TrieSelf Self>
-    [[nodiscard]]
-    static auto child_in(Self &self, const Entry &parent, Rune rune) noexcept -> EntryOf<Self> * {
+    [[nodiscard]] static
+    auto child_in(Self &self, const Entry &parent, Rune rune) noexcept -> EntryOf<Self> * {
         assert_check([&] { return parent.child != kAbsentNode && parent.child < self.node_count_; },
                      "Trie: invalid transition parent");
         const auto bits = child_bits(rune) & kFilterMask;
@@ -281,8 +281,8 @@ class Trie {
     }
 
     template <TrieSelf Self>
-    [[nodiscard]]
-    static auto entry_in(Self &self, std::span<const Rune> key) noexcept -> EntryOf<Self> * {
+    [[nodiscard]] static
+    auto entry_in(Self &self, std::span<const Rune> key) noexcept -> EntryOf<Self> * {
         if (self.empty() || key.empty()) {
             return nullptr;
         }
@@ -589,8 +589,8 @@ class Trie {
     }
 
     // Each node's filter covers the runes of its own edges, before any storage tag.
-    [[nodiscard]]
-    static auto level_order_filters(const LevelOrderShape &shape) -> std::vector<uint32_t> {
+    [[nodiscard]] static
+    auto level_order_filters(const LevelOrderShape &shape) -> std::vector<uint32_t> {
         auto filters = std::vector<uint32_t>(shape.fanouts.size());
         auto begin = size_t{0};
         for (size_t node = 0; node < shape.fanouts.size(); ++node) {

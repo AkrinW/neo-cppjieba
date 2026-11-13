@@ -30,7 +30,8 @@ constexpr auto stop_words_path = std::string_view{DICT_DIR "/stop_words.utf8"};
 // Keyword tests share the base fixture's engine and one pair of extractors loaded from the repository's resources.
 class CApiKeywordTest : public CApiTest {
 protected:
-    static void SetUpTestSuite() {
+    static
+    void SetUpTestSuite() {
         CApiTest::SetUpTestSuite();
         auto storage = std::array<char, 512>{};
         auto diagnostic = neo_jieba_error_buffer_v1{storage.data(), storage.size(), 0};
@@ -46,7 +47,8 @@ protected:
         textrank.reset(created_textrank);
     }
 
-    static void TearDownTestSuite() {
+    static
+    void TearDownTestSuite() {
         textrank.reset();
         tfidf.reset();
         CApiTest::TearDownTestSuite();

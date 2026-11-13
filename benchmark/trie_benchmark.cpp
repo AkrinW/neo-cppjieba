@@ -54,7 +54,8 @@ struct RawEntry {
     std::string tag;
 };
 
-static auto load_raw_entries(const std::string &dict_path) -> std::vector<RawEntry> {
+static
+auto load_raw_entries(const std::string &dict_path) -> std::vector<RawEntry> {
     auto entries = std::vector<RawEntry>{};
     entries.reserve(350000);
 

@@ -127,7 +127,8 @@ private:
 
 // read_file reads the given file path into a FileBuffer.
 // File failures are reported through check before returning any content.
-inline auto read_file(std::string_view path) -> FileBuffer {
+inline
+auto read_file(std::string_view path) -> FileBuffer {
     return FileBuffer{path};
 }
 
@@ -181,7 +182,8 @@ public:
 
 private:
     // A hidden name beside the destination, so the rename stays within one directory and one file system.
-    static auto temporary_path(const detail::platform::FileLocation &destination, std::uint64_t suffix) -> std::string {
+    static
+    auto temporary_path(const detail::platform::FileLocation &destination, std::uint64_t suffix) -> std::string {
         auto digits = std::array<char, 16>{};
         auto *const end = std::to_chars(digits.data(), digits.data() + digits.size(), suffix, 16).ptr;
         return destination.prefix + "." + destination.name + "." + std::string{digits.data(), end} + ".tmp";
@@ -195,7 +197,8 @@ private:
 // replace_file_atomically replaces the file at path with bytes so readers see the previous file or the complete
 // new one, never a partial write. The bytes reach storage under a temporary name beside path before a rename
 // publishes them; a failure before the rename leaves path untouched. The new file gets default permissions.
-inline auto replace_file_atomically(std::string_view path, std::span<const std::byte> bytes) -> void {
+inline
+auto replace_file_atomically(std::string_view path, std::span<const std::byte> bytes) -> void {
     check(path.find('\0') == std::string_view::npos, "FileReplace: file path contains an embedded null byte");
     const auto location = detail::platform::split_file_path(path);
     check(!location.name.empty(), "FileReplace: file path has no file name: {}", path);

@@ -36,8 +36,8 @@ struct EncodedTextWithOffset {
 namespace detail {
 
 // Only these stateless, single-scalar mappings satisfy the original-byte slicing contract.
-[[nodiscard]]
-inline auto icu_encoding_name(EncodingId encoding) -> const char * {
+[[nodiscard]] inline
+auto icu_encoding_name(EncodingId encoding) -> const char * {
     switch (encoding) {
         case EncodingId::UTF8:
             return "UTF-8";
@@ -55,8 +55,8 @@ using IcuConverter = std::unique_ptr<UConverter, decltype(&ucnv_close)>;
 
 // ICU substitutes malformed input by default; install strict error reporting before decoding.
 // Encoding also stops on unmappable scalars and disables optional fallback mappings.
-[[nodiscard]]
-inline auto open_icu_converter(const char *name) -> IcuConverter {
+[[nodiscard]] inline
+auto open_icu_converter(const char *name) -> IcuConverter {
     auto error = U_ZERO_ERROR;
     auto converter = IcuConverter{ucnv_open(name, &error), &ucnv_close};
     check(U_SUCCESS(error) && converter, "Cannot open {} converter: {}", name, u_errorName(error));
@@ -119,8 +119,9 @@ auto decode_icu_source_into(std::string_view input, EncodingId encoding,
 }
 
 // Encode one scalar with typed ICU storage; the supported stateless targets use at most four bytes per scalar.
-inline auto append_icu_encoded_rune(UConverter *converter, const char *name, Rune rune, size_t utf8_offset,
-                                    std::string &out) -> void {
+inline
+auto append_icu_encoded_rune(UConverter *converter, const char *name, Rune rune, size_t utf8_offset, std::string &out)
+    -> void {
     assert(converter != nullptr);
     const auto utf16 = encode_step<char16_t>(rune);
     const auto source = std::array<UChar, 2>{static_cast<UChar>(utf16.units[0]), static_cast<UChar>(utf16.units[1])};
@@ -185,25 +186,26 @@ public:
     IcuCodec() = delete;
 
     // Input must not alias either output buffer. Failure may leave a decoded prefix for subsequent reuse.
-    static auto decode_with_offset_into(std::string_view input, EncodingId encoding, UnicodeWithOffset &out) -> void {
+    static
+    auto decode_with_offset_into(std::string_view input, EncodingId encoding, UnicodeWithOffset &out) -> void {
         detail::decode_icu_source_into<detail::OffsetMode::Record>(input, encoding, out);
     }
 
-    [[nodiscard]]
-    static auto to_utf8(std::string_view input, EncodingId encoding) -> std::string {
+    [[nodiscard]] static
+    auto to_utf8(std::string_view input, EncodingId encoding) -> std::string {
         auto runes = detail::Unicode{};
         detail::decode_icu_source_into<detail::OffsetMode::Omit>(input, encoding, runes);
         return detail::encode<char>(runes);
     }
 
-    [[nodiscard]]
-    static auto from_utf8(std::string_view input, EncodingId encoding) -> std::string {
+    [[nodiscard]] static
+    auto from_utf8(std::string_view input, EncodingId encoding) -> std::string {
         return detail::encode_icu_target<detail::OffsetMode::Omit>(input, encoding);
     }
 
     // offsets[i] locates rune boundary i in the returned bytes, not in the UTF-8 input.
-    [[nodiscard]]
-    static auto from_utf8_with_offset(std::string_view input, EncodingId encoding) -> EncodedTextWithOffset {
+    [[nodiscard]] static
+    auto from_utf8_with_offset(std::string_view input, EncodingId encoding) -> EncodedTextWithOffset {
         return detail::encode_icu_target<detail::OffsetMode::Record>(input, encoding);
     }
 };

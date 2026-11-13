@@ -61,14 +61,14 @@ public:
         return HMModel{*this};
     }
 
-    [[nodiscard]]
-    constexpr auto get_start_prob(HMMState state) const noexcept -> double {
+    [[nodiscard]] constexpr
+    auto get_start_prob(HMMState state) const noexcept -> double {
         assert_check([=] { return static_cast<size_t>(state) < kHMMStatesNum; }, "HMModel: invalid start state");
         return start_prob[static_cast<size_t>(state)];
     }
 
-    [[nodiscard]]
-    constexpr auto get_trans_prob(HMMState from, HMMState to) const noexcept -> double {
+    [[nodiscard]] constexpr
+    auto get_trans_prob(HMMState from, HMMState to) const noexcept -> double {
         assert_check([=] { return static_cast<size_t>(from) < kHMMStatesNum; },
                      "HMModel: invalid transition source state");
         assert_check([=] { return static_cast<size_t>(to) < kHMMStatesNum; },
@@ -77,9 +77,8 @@ public:
     }
 
     /// All transition scores indexed [from][to], for Viterbi kernels that load whole rows.
-    [[nodiscard]]
-    constexpr auto get_trans_probs() const noexcept
-        -> const std::array<std::array<double, kHMMStatesNum>, kHMMStatesNum> & {
+    [[nodiscard]] constexpr
+    auto get_trans_probs() const noexcept -> const std::array<std::array<double, kHMMStatesNum>, kHMMStatesNum> & {
         return trans_prob;
     }
 
@@ -212,7 +211,8 @@ private:
     }
 
     // Both probability formats use finite log-weights bounded by the Viterbi sentinel and log(1).
-    static auto parse_log_prob(std::string_view token) -> double {
+    static
+    auto parse_log_prob(std::string_view token) -> double {
         const auto probability = decode_value<double>(token);
         check(std::isfinite(probability) && probability >= MIN_DOUBLE && probability <= 0.0,
               "HMModel: log-probability must be finite and in [{}, 0], got '{}'", MIN_DOUBLE, token);

@@ -12,7 +12,8 @@
 using namespace neo_cppjieba;
 
 // Malformed dictionaries must be rejected through the checked exception; internal assertions stay fatal.
-extern "C" auto LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size) -> int {
+extern
+"C" auto LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size) -> int {
     try {
         const auto dict = detail::DictTrie{DictSource::memory(as_text(data, size)), std::span<const DictSource>{},
                                            detail::UserWordWeightOption::WordWeightMedian};

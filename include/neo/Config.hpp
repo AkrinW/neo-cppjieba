@@ -55,7 +55,8 @@ concept CapacityInteger = std::same_as<T, std::uint8_t> || std::same_as<T, std::
 
 // Check inclusive capacity limits without comparing a host size to an out-of-range constant.
 template <CapacityInteger T>
-constexpr auto size_fits_capacity(std::size_t size) noexcept -> bool {
+constexpr
+auto size_fits_capacity(std::size_t size) noexcept -> bool {
     if constexpr (std::numeric_limits<T>::digits < std::numeric_limits<std::size_t>::digits) {
         return size <= std::numeric_limits<T>::max();
     } else {
@@ -65,7 +66,8 @@ constexpr auto size_fits_capacity(std::size_t size) noexcept -> bool {
 
 // Keep the maximum id reserved, including when capacity storage is wider than the host size.
 template <CapacityInteger T>
-constexpr auto size_below_capacity(std::size_t size) noexcept -> bool {
+constexpr
+auto size_below_capacity(std::size_t size) noexcept -> bool {
     if constexpr (std::numeric_limits<T>::digits <= std::numeric_limits<std::size_t>::digits) {
         return size < std::numeric_limits<T>::max();
     } else {
@@ -77,8 +79,8 @@ constexpr auto size_below_capacity(std::size_t size) noexcept -> bool {
 // the container they index, so the value is kept even when RuneIndex is wider than size_t, as with 128 bits.
 template <typename Index>
     requires std::integral<Index> || CapacityInteger<Index>
-[[nodiscard]]
-constexpr auto to_index(Index position) noexcept -> std::size_t {
+[[nodiscard]] constexpr
+auto to_index(Index position) noexcept -> std::size_t {
     return static_cast<std::size_t>(position);
 }
 

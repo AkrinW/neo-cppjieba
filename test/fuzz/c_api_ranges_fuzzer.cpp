@@ -58,7 +58,8 @@ auto check_fill(std::string_view input, neo_jieba_mode_v1 mode, bool tagged, neo
 
 // The first byte selects the mode; the second tags the first and second fills and picks the diagnostic capacity.
 // The rest holds both inputs, split at the first 0xFF byte, so the second fill reuses the first fill's storage.
-extern "C" auto LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size) -> int {
+extern
+"C" auto LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size) -> int {
     auto reader = ByteReader{data, size};
     const auto mode = modes[reader.byte() % modes.size()];
     const auto flags = reader.byte();

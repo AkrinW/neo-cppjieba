@@ -46,11 +46,13 @@ struct SegmentStats {
     uint64_t checksum;
 };
 
-static inline auto on_separator(char32_t r, uint64_t &acc) -> void {
+static inline
+auto on_separator(char32_t r, uint64_t &acc) -> void {
     acc ^= static_cast<uint64_t>(r);
 }
 
-static inline auto on_text_segment(std::span<const char32_t> seg, uint64_t &acc) -> void {
+static inline
+auto on_text_segment(std::span<const char32_t> seg, uint64_t &acc) -> void {
     for (auto r : seg) {
         acc = acc * 131 + static_cast<uint64_t>(r);
     }
@@ -64,7 +66,8 @@ struct LineData {
 };
 
 // The shared binary loader now also supports Windows; decoding remains outside the timed region.
-static auto load_unicode_lines(const std::string &path) -> std::vector<LineData> {
+static
+auto load_unicode_lines(const std::string &path) -> std::vector<LineData> {
     auto result = std::vector<LineData>{};
 
     for (const std::string_view line : load_lines(path)) {
@@ -90,8 +93,8 @@ concept SymbolSetLike = requires(char32_t r) {
 template <float load_factor>
 class hash_symbol_set {
 public:
-    [[nodiscard]]
-    static auto contains(char32_t r) -> bool {
+    [[nodiscard]] static
+    auto contains(char32_t r) -> bool {
         static const auto set = []() {
             const auto &symbols = neo_cppjieba::detail::DEFAULT_SEPARATORS;
             auto s = std::unordered_set<char32_t>{};
@@ -107,24 +110,24 @@ public:
 // bitmask_symbol_set: uses a bitmask for runes <= 32 and direct comparison for CJK separators.
 class bitmask_symbol_set {
 public:
-    [[nodiscard]]
-    static constexpr auto contains(char32_t r) noexcept -> bool {
+    [[nodiscard]] static constexpr
+    auto contains(char32_t r) noexcept -> bool {
         return neo_cppjieba::detail::is_default_separator(r);
     }
 };
 
 class bitmask_symbol_set_branchless {
 public:
-    [[nodiscard]]
-    static constexpr auto contains(char32_t r) noexcept -> bool {
+    [[nodiscard]] static constexpr
+    auto contains(char32_t r) noexcept -> bool {
         return neo_cppjieba::detail::is_default_separator_branchless(r);
     }
 };
 
 class bitmask_symbol_set_unlikely {
 public:
-    [[nodiscard]]
-    static constexpr auto contains(char32_t r) noexcept -> bool {
+    [[nodiscard]] static constexpr
+    auto contains(char32_t r) noexcept -> bool {
         return neo_cppjieba::detail::is_default_separator_unlikely(r);
     }
 };
@@ -132,8 +135,8 @@ public:
 // sorted_symbol_set: binary search on a pre-sorted span.
 class sorted_symbol_set {
 public:
-    [[nodiscard]]
-    static constexpr auto contains(char32_t r) noexcept -> bool {
+    [[nodiscard]] static constexpr
+    auto contains(char32_t r) noexcept -> bool {
         const auto &symbols = neo_cppjieba::detail::DEFAULT_SEPARATORS;
 
         auto lo = size_t{0};
@@ -155,8 +158,8 @@ public:
 
 class linear_symbol_set {
 public:
-    [[nodiscard]]
-    static constexpr auto contains(char32_t r) noexcept -> bool {
+    [[nodiscard]] static constexpr
+    auto contains(char32_t r) noexcept -> bool {
         const auto &symbols = neo_cppjieba::detail::DEFAULT_SEPARATORS;
         for (auto s : symbols) {
             if (s == r) {
@@ -361,7 +364,8 @@ auto mask_index_pass(const std::vector<LineData> &lines, std::vector<uint8_t> &m
 //   Pass 1: scan the entire rune array and collect indices of all separators.
 //   Pass 2: iterate the indices to emit segments (non-separator spans + separator spans).
 // Pass 1 is a simple branchless-friendly loop that the compiler may auto-vectorize.
-static auto count_segments_production(const std::vector<LineData> &lines) -> SegmentStats {
+static
+auto count_segments_production(const std::vector<LineData> &lines) -> SegmentStats {
     auto checksum = uint64_t{0};
     for (auto &&line : lines) {
         auto runes = std::span<const char32_t>{line.runes};
@@ -381,14 +385,16 @@ static auto count_segments_production(const std::vector<LineData> &lines) -> Seg
 }
 
 template <SymbolSetLike SymbolSet>
-static auto count_segments_alt(const std::vector<LineData> &lines) -> SegmentStats {
+static
+auto count_segments_alt(const std::vector<LineData> &lines) -> SegmentStats {
     auto checksum = uint64_t{0};
     alternative_pass<SymbolSet>(lines, checksum);
     return SegmentStats{checksum};
 }
 
 template <SymbolSetLike SymbolSet>
-static auto count_segments_mask_iter(const std::vector<LineData> &lines) -> SegmentStats {
+static
+auto count_segments_mask_iter(const std::vector<LineData> &lines) -> SegmentStats {
     auto checksum = uint64_t{0};
     auto mask = std::vector<uint8_t>{};
     mask_iter_pass<SymbolSet>(lines, mask, checksum);
@@ -396,7 +402,8 @@ static auto count_segments_mask_iter(const std::vector<LineData> &lines) -> Segm
 }
 
 template <SymbolSetLike SymbolSet>
-static auto count_segments_mask_index(const std::vector<LineData> &lines) -> SegmentStats {
+static
+auto count_segments_mask_index(const std::vector<LineData> &lines) -> SegmentStats {
     auto checksum = uint64_t{0};
     auto mask = std::vector<uint8_t>{};
     auto sep_indices = std::vector<size_t>{};

@@ -17,8 +17,8 @@ struct DictUnit {
     PosTag tag{};
 
     /// Default construction means "no value"; every finite weight, including zero, is a real entry.
-    [[nodiscard]]
-    constexpr auto has_value() const noexcept -> bool {
+    [[nodiscard]] constexpr
+    auto has_value() const noexcept -> bool {
         return weight != kMissingWordWeight;
     }
 };

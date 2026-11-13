@@ -72,7 +72,8 @@ auto check_rejected(std::string_view utf8, CutMode mode) -> void {
 
 // The first byte selects the mode; the rest is UTF-8 text, re-encoded as UTF-16 and UTF-32 when valid.
 // All three encodings must segment and tag alike, with source offsets in their own code units.
-extern "C" auto LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size) -> int {
+extern
+"C" auto LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size) -> int {
     if (size == 0) {
         return 0;
     }

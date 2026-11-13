@@ -11,7 +11,8 @@ namespace neo_cppjieba::detail {
 enum class UserWordWeightOption : uint8_t { WordWeightMin, WordWeightMedian, WordWeightMax };
 
 // Option values supplied by callers are configuration errors, not internal invariants.
-inline auto check_user_word_weight_option(UserWordWeightOption option) -> void {
+inline
+auto check_user_word_weight_option(UserWordWeightOption option) -> void {
     check(option == UserWordWeightOption::WordWeightMin || option == UserWordWeightOption::WordWeightMedian
               || option == UserWordWeightOption::WordWeightMax,
           "DictTrie: invalid user word weight option {}", static_cast<uint8_t>(option));

@@ -50,8 +50,8 @@ struct WordRange {
     RuneIndex begin;
     RuneIndex end;
 
-    [[nodiscard]]
-    constexpr auto size() const noexcept -> RuneIndex {
+    [[nodiscard]] constexpr
+    auto size() const noexcept -> RuneIndex {
         assert_check([this] { return begin <= end; }, "Reversed internal WordRange [{}, {})", begin, end);
         return end - begin;
     }
@@ -64,7 +64,8 @@ struct WordRange {
         return runes.subspan(static_cast<std::size_t>(begin), static_cast<std::size_t>(size()));
     }
 
-    constexpr auto operator==(const WordRange &) const noexcept -> bool = default;
+    constexpr
+    auto operator==(const WordRange &) const noexcept -> bool = default;
 };
 
 } // namespace neo_cppjieba

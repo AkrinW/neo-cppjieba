@@ -57,15 +57,15 @@ public:
 
     // Load the dictionary from a snapshot made by encode_dict_snapshot. It cuts exactly as the sources it was
     // encoded from would, with weights derived under this build's rules; errors use the checked exception.
-    [[nodiscard]]
-    static auto from_snapshot(const SnapshotSource &dict_snapshot, const DictSource &model) -> Jieba {
+    [[nodiscard]] static
+    auto from_snapshot(const SnapshotSource &dict_snapshot, const DictSource &model) -> Jieba {
         return Jieba{detail::load_dict_snapshot(dict_snapshot), detail::HMModel{model}};
     }
 
     // Encode the dictionary the constructor taking these sources would build. Equal dictionaries give equal bytes,
     // and later builds keep reading the snapshots earlier builds wrote.
-    [[nodiscard]]
-    static auto encode_dict_snapshot(const DictSource &dict, std::span<const DictSource> user_dicts)
+    [[nodiscard]] static
+    auto encode_dict_snapshot(const DictSource &dict, std::span<const DictSource> user_dicts)
         -> std::vector<std::byte> {
         return detail::encode_dict_snapshot(
             detail::DictTrie::level_order(dict, user_dicts, detail::UserWordWeightOption::WordWeightMedian));
@@ -73,8 +73,9 @@ public:
 
     // Encode the snapshot and publish it at path atomically: readers see the previous file or the complete
     // snapshot, never a partial write, and a failure leaves the previous file in place.
-    static auto write_dict_snapshot(const DictSource &dict, std::span<const DictSource> user_dicts,
-                                    std::string_view path) -> void {
+    static
+    auto write_dict_snapshot(const DictSource &dict, std::span<const DictSource> user_dicts, std::string_view path)
+        -> void {
         detail::replace_file_atomically(path, encode_dict_snapshot(dict, user_dicts));
     }
 

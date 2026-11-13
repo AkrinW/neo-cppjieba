@@ -18,7 +18,8 @@ concept TextNumber = (std::integral<T> && !std::same_as<T, bool>) || std::floati
 // decode_value is a helper function that decodes a value of type T from a string_view using std::from_chars.
 // it add error checking and throws an exception if parsing fails.
 template <TextNumber T>
-constexpr auto decode_value(std::string_view sv) -> T {
+constexpr
+auto decode_value(std::string_view sv) -> T {
     check(!sv.empty(), "cannot parse a value from an empty string");
     auto val = T{};
     auto &&[ptr, ec] = std::from_chars(sv.data(), sv.data() + sv.size(), val);
@@ -28,7 +29,8 @@ constexpr auto decode_value(std::string_view sv) -> T {
 
 // encode_value is a helper function that converts a value of type T to a string using std::to_chars.
 template <TextNumber T>
-constexpr auto encode_value(const T &val) -> std::string {
+constexpr
+auto encode_value(const T &val) -> std::string {
     auto buf = std::array<char, 32>{};
     auto &&[ptr, ec] = std::to_chars(buf.data(), buf.data() + buf.size(), val);
     check(ec == std::errc{}, "failed to format value as string");
@@ -60,13 +62,15 @@ public:
         // Default-constructed iterator represents the end (sentinel).
         constexpr iterator() noexcept = default;
 
-        constexpr explicit iterator(std::string_view content) noexcept
+        constexpr
+        explicit iterator(std::string_view content) noexcept
             : next_(content.data()), end_(content.data() + content.size()) {
             advance();
         }
 
         // Compute the current line on dereference: strip trailing \n (and \r\n) from [cur_, next_).
-        constexpr auto operator*() const noexcept -> std::string_view {
+        constexpr
+        auto operator*() const noexcept -> std::string_view {
             assert_check([this] { return cur_ != nullptr && next_ > cur_ && next_ <= end_; },
                          "lines_view: cannot dereference an exhausted or invalid iterator");
             const auto *e = next_;
@@ -79,23 +83,27 @@ public:
             return std::string_view{cur_, static_cast<size_t>(e - cur_)};
         }
 
-        constexpr auto operator++() noexcept -> iterator & {
+        constexpr
+        auto operator++() noexcept -> iterator & {
             advance();
             return *this;
         }
 
-        constexpr auto operator++(int) noexcept -> iterator {
+        constexpr
+        auto operator++(int) noexcept -> iterator {
             auto tmp = *this;
             advance();
             return tmp;
         }
 
-        constexpr auto operator==(const iterator &other) const noexcept -> bool {
+        constexpr
+        auto operator==(const iterator &other) const noexcept -> bool {
             return cur_ == other.cur_;
         }
 
     private:
-        constexpr auto advance() noexcept -> void {
+        constexpr
+        auto advance() noexcept -> void {
             if (next_ == nullptr) {
                 cur_ = nullptr;
                 return;
@@ -118,15 +126,17 @@ public:
     };
 
     constexpr lines_view() noexcept = default;
-    constexpr explicit lines_view(std::string_view content) noexcept : content_(content) {
+    constexpr
+    explicit lines_view(std::string_view content) noexcept
+        : content_(content) {
     }
 
-    [[nodiscard]]
-    constexpr auto begin() const noexcept -> iterator {
+    [[nodiscard]] constexpr
+    auto begin() const noexcept -> iterator {
         return iterator{content_};
     }
-    [[nodiscard]]
-    constexpr auto end() const noexcept -> iterator {
+    [[nodiscard]] constexpr
+    auto end() const noexcept -> iterator {
         return iterator{};
     }
 
@@ -135,7 +145,8 @@ private:
 };
 
 // get_line_view returns a lazy zero-copy range of lines over the given content.
-constexpr auto get_line_view(std::string_view content) noexcept -> lines_view {
+constexpr
+auto get_line_view(std::string_view content) noexcept -> lines_view {
     return lines_view{content};
 }
 
@@ -170,7 +181,8 @@ public:
 
         // Compute the current field on dereference.
         // If next_field_ is nullptr (last field), end = data_end_; otherwise end = next_field_ - 1.
-        constexpr auto operator*() const noexcept -> std::string_view {
+        constexpr
+        auto operator*() const noexcept -> std::string_view {
             assert_check([this] { return cur_ != nullptr && cur_ <= data_end_; },
                          "split_view: cannot dereference an exhausted or invalid iterator");
             assert_check([this] { return next_field_ == nullptr || (cur_ < next_field_ && next_field_ <= data_end_); },
@@ -179,23 +191,27 @@ public:
             return std::string_view{cur_, static_cast<size_t>(end - cur_)};
         }
 
-        constexpr auto operator++() noexcept -> iterator & {
+        constexpr
+        auto operator++() noexcept -> iterator & {
             advance();
             return *this;
         }
 
-        constexpr auto operator++(int) noexcept -> iterator {
+        constexpr
+        auto operator++(int) noexcept -> iterator {
             auto tmp = *this;
             advance();
             return tmp;
         }
 
-        constexpr auto operator==(const iterator &other) const noexcept -> bool {
+        constexpr
+        auto operator==(const iterator &other) const noexcept -> bool {
             return cur_ == other.cur_;
         }
 
     private:
-        constexpr auto advance() noexcept -> void {
+        constexpr
+        auto advance() noexcept -> void {
             cur_ = next_field_;
             if (cur_ == nullptr) {
                 return;
@@ -217,12 +233,12 @@ public:
     constexpr split_view(std::string_view content, char delim) noexcept : content_(content), delim_(delim) {
     }
 
-    [[nodiscard]]
-    constexpr auto begin() const noexcept -> iterator {
+    [[nodiscard]] constexpr
+    auto begin() const noexcept -> iterator {
         return iterator{content_, delim_};
     }
-    [[nodiscard]]
-    constexpr auto end() const noexcept -> iterator {
+    [[nodiscard]] constexpr
+    auto end() const noexcept -> iterator {
         return iterator{};
     }
 
@@ -232,12 +248,14 @@ private:
 };
 
 // get_split_view returns a lazy zero-copy range of tokens from content, split by delim.
-constexpr auto get_split_view(std::string_view content, char delim) noexcept -> split_view {
+constexpr
+auto get_split_view(std::string_view content, char delim) noexcept -> split_view {
     return split_view{content, delim};
 }
 
 // trim is a helper function that removes leading and trailing whitespace from a string_view.
-constexpr auto trim(std::string_view sv) noexcept -> std::string_view {
+constexpr
+auto trim(std::string_view sv) noexcept -> std::string_view {
     auto start = sv.find_first_not_of(" \t\r\n");
     if (start == std::string_view::npos) {
         return {};

@@ -24,8 +24,9 @@ enum class StyleMatchMode { PathOnly, Search };
 
 // Reference MP scoring uses a frequency of one only when no dictionary edge exists.
 template <StyleMatchMode mode>
-inline auto style_build_route(const DictTrie &dict, std::span<const Rune> runes, WordWeight missing_weight,
-                              SegmentScratch &scratch) -> void {
+inline
+auto style_build_route(const DictTrie &dict, std::span<const Rune> runes, WordWeight missing_weight,
+                       SegmentScratch &scratch) -> void {
     assert(dict.freq_sum() > 0);
     auto &route = scratch.route;
     if (route.size() < runes.size()) {
@@ -64,8 +65,9 @@ inline auto style_build_route(const DictTrie &dict, std::span<const Rune> runes,
 
 // HMM must not undo MP's single-character decomposition of a known dictionary word.
 template <bool hmm, WordEmitter Emit>
-inline auto style_emit_singletons(const DictTrie &dict, const HMModel &model, std::span<const Rune> runes,
-                                  WordRange run, const Emit &emit, SegmentScratch &scratch) -> void {
+inline
+auto style_emit_singletons(const DictTrie &dict, const HMModel &model, std::span<const Rune> runes, WordRange run,
+                           const Emit &emit, SegmentScratch &scratch) -> void {
     assert(run.begin < run.end && run.end <= runes.size());
     if constexpr (!hmm) {
         emit(run);
@@ -87,8 +89,9 @@ inline auto style_emit_singletons(const DictTrie &dict, const HMModel &model, st
 
 // Consume the reusable MP route, joining ASCII without HMM and recognizing unknown runs with HMM.
 template <bool hmm, StyleMatchMode mode, WordEmitter Emit>
-inline auto style_emit_route(const DictTrie &dict, const HMModel &model, std::span<const Rune> runes,
-                             WordWeight missing_weight, const Emit &emit, SegmentScratch &scratch) -> void {
+inline
+auto style_emit_route(const DictTrie &dict, const HMModel &model, std::span<const Rune> runes,
+                      WordWeight missing_weight, const Emit &emit, SegmentScratch &scratch) -> void {
     style_build_route<mode>(dict, runes, missing_weight, scratch);
     const auto &route = scratch.route;
     auto begin = RuneIndex{0};
@@ -112,8 +115,9 @@ inline auto style_emit_route(const DictTrie &dict, const HMModel &model, std::sp
 template <bool hmm, StyleMatchMode mode, typename Emit>
     requires((mode == StyleMatchMode::PathOnly && WordEmitter<Emit>)
              || (mode == StyleMatchMode::Search && BlockWordEmitter<Emit>))
-inline auto style_emit_blocks(const DictTrie &dict, const HMModel &model, std::span<const Rune> runes, const Emit &emit,
-                              SegmentScratch &scratch) -> void {
+inline
+auto style_emit_blocks(const DictTrie &dict, const HMModel &model, std::span<const Rune> runes, const Emit &emit,
+                       SegmentScratch &scratch) -> void {
     // All dictionary blocks in this call share the same fallback weight.
     const auto missing_weight = static_cast<WordWeight>(-std::log(static_cast<double>(dict.freq_sum())));
     auto begin = RuneIndex{0};
@@ -156,8 +160,9 @@ inline auto style_emit_blocks(const DictTrie &dict, const HMModel &model, std::s
 // Reference precise mode for the RUST and PYTHON styles; retains the caller's storage across calls.
 template <bool hmm>
 struct StyledMixSegment {
-    static auto cut_into(const DictTrie &dict, const HMModel &model, std::span<const Rune> runes,
-                         std::vector<WordRange> &out, SegmentScratch &scratch) -> void {
+    static
+    auto cut_into(const DictTrie &dict, const HMModel &model, std::span<const Rune> runes, std::vector<WordRange> &out,
+                  SegmentScratch &scratch) -> void {
         out.clear();
         out.reserve(runes.size());
         const auto emit = [&](WordRange word) {
@@ -170,8 +175,8 @@ struct StyledMixSegment {
 static_assert(SegmentPolicy<StyledMixSegment<true>> && SegmentPolicy<StyledMixSegment<false>>);
 
 // Rust search adds alphabetic parts of connector-separated compounds before dictionary grams.
-inline auto style_emit_compound_parts(std::span<const Rune> runes, WordRange word, std::vector<WordRange> &out)
-    -> void {
+inline
+auto style_emit_compound_parts(std::span<const Rune> runes, WordRange word, std::vector<WordRange> &out) -> void {
     const auto text = word.slice(runes);
     if (!std::ranges::any_of(text, is_rust_connector)) {
         return;
@@ -191,8 +196,9 @@ inline auto style_emit_compound_parts(std::span<const Rune> runes, WordRange wor
 }
 
 // Reference search emits two-rune matches, then three-rune matches, then the precise-mode word.
-inline auto style_emit_search_word(std::span<const Rune> runes, WordRange word, RuneIndex block_begin,
-                                   std::span<const SearchSubwords> subwords, std::vector<WordRange> &out) -> void {
+inline
+auto style_emit_search_word(std::span<const Rune> runes, WordRange word, RuneIndex block_begin,
+                            std::span<const SearchSubwords> subwords, std::vector<WordRange> &out) -> void {
     assert(word.begin < word.end && word.end <= runes.size());
     // Emitted ranges are global; membership rows belong to the current dictionary block.
     assert(word.size() <= 2
@@ -217,8 +223,9 @@ inline auto style_emit_search_word(std::span<const Rune> runes, WordRange word, 
 // Search shares precise-mode boundaries and emits directly into the final range array.
 template <bool hmm>
 struct StyledQuerySegment {
-    static auto cut_into(const DictTrie &dict, const HMModel &model, std::span<const Rune> runes,
-                         std::vector<WordRange> &out, SegmentScratch &scratch) -> void {
+    static
+    auto cut_into(const DictTrie &dict, const HMModel &model, std::span<const Rune> runes, std::vector<WordRange> &out,
+                  SegmentScratch &scratch) -> void {
         out.clear();
         out.reserve(runes.size());
         const auto emit = [&](WordRange word, RuneIndex block_begin) {
@@ -231,8 +238,8 @@ struct StyledQuerySegment {
 static_assert(SegmentPolicy<StyledQuerySegment<true>> && SegmentPolicy<StyledQuerySegment<false>>);
 
 // Python FULL keeps whitespace matches and the intervening gaps, including empty gaps.
-inline auto style_python_full_unmatched(std::span<const Rune> runes, RuneIndex pos, std::vector<WordRange> &out)
-    -> void {
+inline
+auto style_python_full_unmatched(std::span<const Rune> runes, RuneIndex pos, std::vector<WordRange> &out) -> void {
     auto gap = RuneIndex{0};
     auto i = RuneIndex{0};
     while (i < runes.size()) {
@@ -253,8 +260,9 @@ inline auto style_python_full_unmatched(std::span<const Rune> runes, RuneIndex p
 }
 
 // Python FULL buffers English words; overlapping matches extend ranges instead of duplicating source text.
-inline auto style_python_full_block(const DictTrie &dict, std::span<const Rune> runes, RuneIndex pos,
-                                    std::vector<WordRange> &out, SegmentScratch &scratch) -> void {
+inline
+auto style_python_full_block(const DictTrie &dict, std::span<const Rune> runes, RuneIndex pos,
+                             std::vector<WordRange> &out, SegmentScratch &scratch) -> void {
     auto previous_end = RuneIndex{0};
     auto english = WordRange{0, 0};
     const auto emit = [&](WordRange word) {
@@ -301,13 +309,14 @@ inline auto style_python_full_block(const DictTrie &dict, std::span<const Rune> 
 }
 
 // Outside Rust FULL's CJK blocks, ASCII alphanumerics, plus, hash and LF form runs.
-[[nodiscard]]
-constexpr auto is_rust_full_run(Rune rune) noexcept -> bool {
+[[nodiscard]] constexpr
+auto is_rust_full_run(Rune rune) noexcept -> bool {
     return is_ascii_alphanumeric(rune) || rune == U'+' || rune == U'#' || rune == U'\n';
 }
 
 // Rust FULL emits other unmatched characters individually, without Python's empty tokens.
-inline auto style_rust_full_unmatched(std::span<const Rune> runes, RuneIndex pos, std::vector<WordRange> &out) -> void {
+inline
+auto style_rust_full_unmatched(std::span<const Rune> runes, RuneIndex pos, std::vector<WordRange> &out) -> void {
     auto begin = RuneIndex{0};
     while (begin < runes.size()) {
         auto end = static_cast<RuneIndex>(begin + 1);
@@ -323,8 +332,9 @@ inline auto style_rust_full_unmatched(std::span<const Rune> runes, RuneIndex pos
 
 // FULL uses separate reference contracts: Rust emits every CJK match; Python suppresses covered singletons.
 struct StyledFullSegment {
-    static auto cut_into(const DictTrie &dict, const HMModel &, std::span<const Rune> runes,
-                         std::vector<WordRange> &out, SegmentScratch &scratch) -> void {
+    static
+    auto cut_into(const DictTrie &dict, const HMModel &, std::span<const Rune> runes, std::vector<WordRange> &out,
+                  SegmentScratch &scratch) -> void {
         out.clear();
         out.reserve(runes.size());
         const auto classify = [](Rune rune) {

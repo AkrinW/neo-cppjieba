@@ -36,7 +36,8 @@ public:
     }
 
 private:
-    friend auto detail::segment_state(Workspace &workspace) noexcept -> detail::SegmentState &;
+    friend
+    auto detail::segment_state(Workspace &workspace) noexcept -> detail::SegmentState &;
 
     detail::SegmentState state_;
 };
@@ -44,7 +45,8 @@ private:
 namespace detail {
 
 // The single access point to a workspace's buffers; facades unpack it before calling algorithms.
-inline auto segment_state(Workspace &workspace) noexcept -> SegmentState & {
+inline
+auto segment_state(Workspace &workspace) noexcept -> SegmentState & {
     return workspace.state_;
 }
 

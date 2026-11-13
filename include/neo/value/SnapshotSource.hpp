@@ -24,13 +24,13 @@ auto with_snapshot_bytes(const SnapshotSource &source, Parse &&parse) -> decltyp
 // reference to the bytes or the file. The path is copied; the name only labels diagnostics.
 class SnapshotSource {
 public:
-    [[nodiscard]]
-    static auto file(std::string_view path) -> SnapshotSource {
+    [[nodiscard]] static
+    auto file(std::string_view path) -> SnapshotSource {
         return SnapshotSource{Kind::File, std::string{path}, {}};
     }
 
-    [[nodiscard]]
-    static auto memory(std::span<const std::byte> bytes, std::string_view name) -> SnapshotSource {
+    [[nodiscard]] static
+    auto memory(std::span<const std::byte> bytes, std::string_view name) -> SnapshotSource {
         return SnapshotSource{Kind::Memory, std::string{name}, bytes};
     }
 
@@ -55,7 +55,8 @@ private:
 
     template <typename Parse>
         requires std::invocable<Parse, std::span<const std::byte>, std::string_view>
-    friend auto detail::with_snapshot_bytes(const SnapshotSource &source, Parse &&parse) -> decltype(auto);
+    friend
+    auto detail::with_snapshot_bytes(const SnapshotSource &source, Parse &&parse) -> decltype(auto);
 
     Kind kind_;
     std::string name_;

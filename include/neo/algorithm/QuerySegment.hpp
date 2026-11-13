@@ -31,8 +31,9 @@ namespace neo_cppjieba::detail {
 template <bool hmm = true>
 struct QuerySegment {
     // Replace output while reusing all algorithm buffers.
-    static auto cut_into(const DictTrie &dict, const HMModel &model, std::span<const Rune> runes,
-                         std::vector<WordRange> &result, detail::SegmentScratch &scratch) -> void {
+    static
+    auto cut_into(const DictTrie &dict, const HMModel &model, std::span<const Rune> runes,
+                  std::vector<WordRange> &result, detail::SegmentScratch &scratch) -> void {
         assert_check([&] { return runes.size() <= std::numeric_limits<RuneIndex>::max(); },
                      "QuerySegment: input exceeds the word-range limit");
         result.clear();
@@ -42,8 +43,9 @@ struct QuerySegment {
 
 private:
     /// Append query-mode segmentation results while preserving separator runes as standalone tokens.
-    static auto cut_append(const DictTrie &dict, const HMModel &model, std::span<const Rune> runes, RuneIndex pos,
-                           std::vector<WordRange> &result, detail::SegmentScratch &scratch) -> void {
+    static
+    auto cut_append(const DictTrie &dict, const HMModel &model, std::span<const Rune> runes, RuneIndex pos,
+                    std::vector<WordRange> &result, detail::SegmentScratch &scratch) -> void {
         assert_check(
             [&] { return runes.size() <= static_cast<RuneIndex>(std::numeric_limits<RuneIndex>::max() - pos); },
             "QuerySegment: global word offsets overflow");
@@ -60,9 +62,9 @@ private:
     }
 
     /// Check whether the dictionary contains the two- or three-rune word [begin, end) of the segment.
-    [[nodiscard]]
-    static auto has_short_match(std::span<const detail::SearchSubwords> matches, RuneIndex begin,
-                                RuneIndex end) noexcept -> bool {
+    [[nodiscard]] static
+    auto has_short_match(std::span<const detail::SearchSubwords> matches, RuneIndex begin, RuneIndex end) noexcept
+        -> bool {
         assert(begin < end && end <= matches.size());
         const auto length = end - begin;
         assert(length == 2 || length == 3);
@@ -70,8 +72,9 @@ private:
     }
 
     /// Emit the 2-gram and 3-gram dictionary sub-words of a route word from the recorded membership flags.
-    static auto append_sub_words(std::span<const detail::SearchSubwords> matches, RuneIndex segment_offset,
-                                 WordRange word, std::vector<WordRange> &result) -> void {
+    static
+    auto append_sub_words(std::span<const detail::SearchSubwords> matches, RuneIndex segment_offset, WordRange word,
+                          std::vector<WordRange> &result) -> void {
         assert_check(
             [&] {
                 return matches.size() <= static_cast<RuneIndex>(std::numeric_limits<RuneIndex>::max() - segment_offset);
@@ -109,8 +112,9 @@ private:
 
     /// Emit query-mode tokens for a segment-local word, including HMM words off the MP route:
     /// every start position retains short-word flags, independent of the chosen route.
-    static auto append_query_local_word(std::span<const detail::SearchSubwords> matches, WordRange word,
-                                        RuneIndex segment_offset, std::vector<WordRange> &result) -> void {
+    static
+    auto append_query_local_word(std::span<const detail::SearchSubwords> matches, WordRange word,
+                                 RuneIndex segment_offset, std::vector<WordRange> &result) -> void {
         assert_check(
             [&] {
                 return matches.size() <= static_cast<RuneIndex>(std::numeric_limits<RuneIndex>::max() - segment_offset);
@@ -125,15 +129,17 @@ private:
     }
 
     /// Emit the searchable sub-words of a global word, then the word itself.
-    static auto append_query_word(std::span<const detail::SearchSubwords> matches, RuneIndex segment_offset,
-                                  WordRange word, std::vector<WordRange> &result) -> void {
+    static
+    auto append_query_word(std::span<const detail::SearchSubwords> matches, RuneIndex segment_offset, WordRange word,
+                           std::vector<WordRange> &result) -> void {
         append_sub_words(matches, segment_offset, word, result);
         result.push_back(word);
     }
 
     /// Build the route with short-word flags, then emit final words without intermediate word arrays.
-    static auto cut_one_segment(const DictTrie &dict, const HMModel &model, std::span<const Rune> runes, RuneIndex pos,
-                                std::vector<WordRange> &result, detail::SegmentScratch &scratch) -> void {
+    static
+    auto cut_one_segment(const DictTrie &dict, const HMModel &model, std::span<const Rune> runes, RuneIndex pos,
+                         std::vector<WordRange> &result, detail::SegmentScratch &scratch) -> void {
         assert_check(
             [&] { return runes.size() <= static_cast<RuneIndex>(std::numeric_limits<RuneIndex>::max() - pos); },
             "QuerySegment: global word offsets overflow");

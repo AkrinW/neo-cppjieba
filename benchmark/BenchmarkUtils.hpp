@@ -30,7 +30,8 @@ inline const void *volatile escaped_pointer = nullptr;
 // ─────────────────────────────────────────────────────────────────────────────
 
 template <typename T>
-inline auto DoNotOptimize(const T &value) -> void {
+inline
+auto DoNotOptimize(const T &value) -> void {
 #ifdef _MSC_VER
     benchmark_detail::escaped_pointer = std::addressof(value);
     std::atomic_signal_fence(std::memory_order_seq_cst);
@@ -40,7 +41,8 @@ inline auto DoNotOptimize(const T &value) -> void {
 }
 
 template <typename T>
-inline auto DoNotOptimize(T &value) -> void {
+inline
+auto DoNotOptimize(T &value) -> void {
 #ifdef _MSC_VER
     benchmark_detail::escaped_pointer = std::addressof(value);
     std::atomic_signal_fence(std::memory_order_seq_cst);
@@ -61,7 +63,8 @@ using Ms = std::chrono::duration<double, std::milli>;
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Binary streams replace mmap for portable fixture loading outside the timed region.
-inline auto load_lines(const std::string &path) -> std::vector<std::string> {
+inline
+auto load_lines(const std::string &path) -> std::vector<std::string> {
     auto lines = std::vector<std::string>{};
 
     auto input = std::ifstream{std::filesystem::path{std::u8string{path.begin(), path.end()}}, std::ios::binary};
