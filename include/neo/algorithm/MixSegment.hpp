@@ -22,8 +22,9 @@ namespace neo_cppjieba::detail {
 /// With HMM, each run of single-rune route words that are not user-dictionary singletons is
 /// re-segmented by HMM so out-of-vocabulary words can be recovered. MIX and SEARCH share this walk.
 template <bool hmm, WordEmitter Emit>
-inline auto mix_emit_route(const DictTrie &dict, const HMModel &model, std::span<const Rune> runes, const Emit &emit,
-                           SegmentScratch &scratch) -> void {
+inline
+auto mix_emit_route(const DictTrie &dict, const HMModel &model, std::span<const Rune> runes, const Emit &emit,
+                    SegmentScratch &scratch) -> void {
     if constexpr (!hmm) {
         mp_emit_route(runes.size(), emit, scratch);
     } else {
@@ -58,8 +59,9 @@ inline auto mix_emit_route(const DictTrie &dict, const HMModel &model, std::span
 
 /// Append MIX results at global offset pos, keeping separator runes as standalone tokens.
 template <bool hmm>
-inline auto mix_cut_append(const DictTrie &dict, const HMModel &model, std::span<const Rune> runes, RuneIndex pos,
-                           std::vector<WordRange> &out, SegmentScratch &scratch) -> void {
+inline
+auto mix_cut_append(const DictTrie &dict, const HMModel &model, std::span<const Rune> runes, RuneIndex pos,
+                    std::vector<WordRange> &out, SegmentScratch &scratch) -> void {
     if constexpr (!hmm) {
         mp_cut_append(dict, runes, pos, out, scratch);
     } else {
@@ -101,8 +103,9 @@ inline auto mix_cut_append(const DictTrie &dict, const HMModel &model, std::span
 template <bool hmm = true>
 struct MixSegment {
     // Replace output while keeping MP and HMM storage alive for later segments and calls.
-    static auto cut_into(const DictTrie &dict, const HMModel &model, std::span<const Rune> runes,
-                         std::vector<WordRange> &result, detail::SegmentScratch &scratch) -> void {
+    static
+    auto cut_into(const DictTrie &dict, const HMModel &model, std::span<const Rune> runes,
+                  std::vector<WordRange> &result, detail::SegmentScratch &scratch) -> void {
         assert_check([&] { return runes.size() <= std::numeric_limits<RuneIndex>::max(); },
                      "MixSegment: input exceeds the word-range limit");
         result.clear();

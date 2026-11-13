@@ -24,8 +24,8 @@ struct RuneStringHash {
 using RuneStringSet = gtl::flat_hash_set<std::u32string, RuneStringHash, std::equal_to<>>;
 
 // View code points as the u32string_view key of rune-string sets and maps; no characters are copied.
-[[nodiscard]]
-inline auto rune_view(std::span<const Rune> runes) noexcept -> std::u32string_view {
+[[nodiscard]] inline
+auto rune_view(std::span<const Rune> runes) noexcept -> std::u32string_view {
     return {runes.data(), runes.size()};
 }
 

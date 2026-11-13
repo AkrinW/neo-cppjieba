@@ -141,11 +141,15 @@ GCC 构建另有 `neo_inline_hot_paths`，检查逐字符热点函数在内联�
 CI 中每种工具链只用一个版本，Linux 任务自行安装：GCC 16 来自 Ubuntu 26.04 软件源（该源提供的是 16-20260322 开发快照），
 LLVM 23 来自 apt.llvm.org，软件源由 `tools/add-llvm-apt-source.sh` 添加。Linux 上的 Clang 任务同时安装 libstdc++ 16，
 与 GCC 任务使用同一标准库。本地格式化请使用 clang-format 23，与 CI 结果保持一致。
+
+函数的前置 `[[...]]` 属性与 `static`、`constexpr`、`inline` 同行，返回类型另起一行；变量的属性独占一行。
+`BreakAfterAttributes: Leave` 保留手动设置的属性换行，新增代码需遵循上述约定。
+
 [Quality 工作流](../.github/workflows/quality.yml) 各项检查的本地命令如下：
 
 | 检查 | 本地命令 |
 | --- | --- |
-| clang-format | `tools/clang-format-recursive.sh --check`；去掉 `--check` 即就地格式化 |
+| clang-format | `tools/clang-format-recursive.sh --check include/neo api test examples benchmark`；去掉 `--check` 即就地格式化 |
 | clang-tidy | `BUILD_DIR=build tools/clang-tidy-recursive.sh --check`；去掉 `--check` 即循环应用修复 |
 | clang 静态分析 | `CLANG_TIDY_CHECKS='-*,clang-analyzer-*,-clang-analyzer-cplusplus.Move,-clang-analyzer-optin.core.EnumCastOutOfRange' PER_FILE_TIMEOUT=900 BUILD_DIR=build tools/clang-tidy-recursive.sh --check` |
 | 头文件自足 | `tools/check-headers.sh`，`CLANG_CXX` 指定 Clang；`BUILD_TESTING` 构建同时编译 `neo_header_check` |

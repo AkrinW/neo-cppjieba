@@ -22,13 +22,13 @@ auto with_source_text(const DictSource &source, Parse &&parse) -> decltype(auto)
 // loaded objects keep no reference to it. The name only labels diagnostics.
 class DictSource {
 public:
-    [[nodiscard]]
-    static auto file(std::string_view path) -> DictSource {
+    [[nodiscard]] static
+    auto file(std::string_view path) -> DictSource {
         return DictSource{Kind::File, std::string{path}, {}};
     }
 
-    [[nodiscard]]
-    static auto memory(std::string_view text, std::string_view name = "<memory>") -> DictSource {
+    [[nodiscard]] static
+    auto memory(std::string_view text, std::string_view name = "<memory>") -> DictSource {
         return DictSource{Kind::Memory, std::string{name}, text};
     }
 
@@ -51,7 +51,8 @@ private:
     }
 
     template <detail::SourceTextParser Parse>
-    friend auto detail::with_source_text(const DictSource &source, Parse &&parse) -> decltype(auto);
+    friend
+    auto detail::with_source_text(const DictSource &source, Parse &&parse) -> decltype(auto);
 
     Kind kind_;
     std::string name_;

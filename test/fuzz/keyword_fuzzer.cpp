@@ -90,7 +90,8 @@ auto check_rejected(const Extract &extract) -> void {
 
 // The first byte is top_n; the rest holds the IDF table, the stop words and the input, split at 0xFF bytes.
 // Malformed resources and input must be rejected through the checked exception; internal assertions stay fatal.
-extern "C" auto LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size) -> int {
+extern
+"C" auto LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size) -> int {
     auto reader = ByteReader{data, size};
     const auto top_n = static_cast<std::size_t>(reader.byte() % 32);
     const auto parts = split_parts(reader.rest(), 3);

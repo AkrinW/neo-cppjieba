@@ -59,8 +59,9 @@ constexpr auto kMethods = std::array{
 // NeoCutFn: (const std::string &) -> std::vector<std::string>
 // ─────────────────────────────────────────────────────────────────────────────
 template <typename OldCutFn, typename NeoCutFn>
-static auto verify_method(const char *method_name, const OldCutFn &old_fn, const NeoCutFn &neo_fn,
-                          const std::vector<std::string> &lines) -> bool {
+static
+auto verify_method(const char *method_name, const OldCutFn &old_fn, const NeoCutFn &neo_fn,
+                   const std::vector<std::string> &lines) -> bool {
     std::printf("  %-8s: ", method_name);
     auto mismatches = size_t{0};
     for (auto i = size_t{0}; i < lines.size(); ++i) {
@@ -99,7 +100,8 @@ static auto verify_method(const char *method_name, const OldCutFn &old_fn, const
 }
 
 // Tagged results compare as "word/tag" strings so verify_method can report mismatches.
-static auto old_tagged_words(const cppjieba::Jieba &jieba, const std::string &s) -> std::vector<std::string> {
+static
+auto old_tagged_words(const cppjieba::Jieba &jieba, const std::string &s) -> std::vector<std::string> {
     auto pairs = std::vector<std::pair<std::string, std::string>>{};
     jieba.Tag(s, pairs);
     auto words = std::vector<std::string>{};
@@ -110,7 +112,8 @@ static auto old_tagged_words(const cppjieba::Jieba &jieba, const std::string &s)
     return words;
 }
 
-static auto neo_tagged_words(const neo_cppjieba::Jieba &jieba, const std::string &s) -> std::vector<std::string> {
+static
+auto neo_tagged_words(const neo_cppjieba::Jieba &jieba, const std::string &s) -> std::vector<std::string> {
     auto words = std::vector<std::string>{};
     for (auto &[word, tag] : jieba.cut_strings<neo_cppjieba::Tagging::Pos>(s, neo_cppjieba::CutMode::MIX)) {
         words.push_back(word + "/" + tag.to_string());

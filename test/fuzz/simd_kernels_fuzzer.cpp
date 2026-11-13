@@ -181,7 +181,8 @@ auto check_legal_viterbi(ByteReader &reader) -> void {
 
 // Each SIMD kernel the build compiles must match its scalar reference bit for bit; OFF builds compare the scalar
 // dispatch with itself.
-extern "C" auto LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size) -> int {
+extern
+"C" auto LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size) -> int {
     auto reader = ByteReader{data, size};
     switch (static_cast<Kernel>(reader.byte() % kernel_count)) {
         case Kernel::Separators:

@@ -29,7 +29,8 @@ concept CodeUnit = CharType<T> || ByteType<T>;
 // Use a consteval function and if constexpr to replace complex SFINAE template specializations,
 // avoiding ambiguity during type extraction.
 template <typename T>
-consteval auto get_char_type() noexcept {
+consteval
+auto get_char_type() noexcept {
     using Decayed = std::decay_t<T>;
     if constexpr (std::is_pointer_v<Decayed>) {
         // Pointer or decayed C-array (e.g., const char*, char[N])

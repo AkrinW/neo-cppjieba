@@ -19,20 +19,20 @@ public:
 
     // Check well-formedness without allocating; bytes valid in several encodings are not told apart.
     template <StringLike T>
-    [[nodiscard]]
-    static constexpr auto is_valid(const T &input) -> bool {
+    [[nodiscard]] static constexpr
+    auto is_valid(const T &input) -> bool {
         return detail::is_valid_utf(input);
     }
 
     template <StringLike T>
-    [[nodiscard]]
-    static auto decode(const T &input) -> std::vector<Rune> {
+    [[nodiscard]] static
+    auto decode(const T &input) -> std::vector<Rune> {
         return detail::decode(input);
     }
 
     template <CharType CharT>
-    [[nodiscard]]
-    static auto encode(std::span<const Rune> runes) -> std::basic_string<CharT> {
+    [[nodiscard]] static
+    auto encode(std::span<const Rune> runes) -> std::basic_string<CharT> {
         return detail::encode<CharT>(runes);
     }
 };

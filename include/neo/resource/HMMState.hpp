@@ -20,7 +20,8 @@ inline constexpr auto kHMMStatesNum = size_t{4};
 using EmitProbabilities = std::array<double, kHMMStatesNum>;
 inline constexpr auto kHMMStateLables = std::array<char, kHMMStatesNum>{'B', 'E', 'M', 'S'};
 
-constexpr auto get_hmm_state_label(HMMState state) noexcept -> char {
+constexpr
+auto get_hmm_state_label(HMMState state) noexcept -> char {
     assert_check([=] { return static_cast<size_t>(state) < kHMMStatesNum; }, "HMModel: invalid label state");
     return kHMMStateLables[static_cast<size_t>(state)];
 }

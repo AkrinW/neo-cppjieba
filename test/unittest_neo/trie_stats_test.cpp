@@ -422,7 +422,8 @@ TEST(TrieStatsTest, SupplementaryRootsNeedNoBmpTable) {
 /// Helper: load jieba.dict.utf8 and build a neo Trie.
 /// Format per line: "word freq tag"  (space-delimited, UTF-8).
 namespace {
-static auto build_jieba_trie() -> std::pair<Trie, size_t> {
+static
+auto build_jieba_trie() -> std::pair<Trie, size_t> {
     auto dict_path = std::string(DICT_DIR) + "/jieba.dict.utf8";
     auto file = read_file(dict_path);
     auto content = file.content();

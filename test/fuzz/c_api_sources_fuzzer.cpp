@@ -124,7 +124,8 @@ auto check_same_cut(const neo_jieba_engine_v1 *engine, const Jieba &reference, s
 // The first byte selects a snapshot load, corrupts the main descriptor's kind or reserved field, and picks the
 // diagnostic capacity. A snapshot load reads the rest as the snapshot; otherwise up to four parts split at 0xFF
 // bytes are the main dictionary and its user dictionaries. Every load uses the small HMM model.
-extern "C" auto LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size) -> int {
+extern
+"C" auto LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size) -> int {
     auto reader = ByteReader{data, size};
     const auto flags = reader.byte();
     const auto kind = (flags & 1) != 0 ? SourceKind::Snapshot : SourceKind::Dictionaries;

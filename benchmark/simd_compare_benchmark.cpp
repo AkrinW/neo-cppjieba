@@ -39,7 +39,8 @@ constexpr auto kModes = std::array{
 };
 
 // Name the level the whole program was built with, so reports from different builds stay distinguishable.
-constexpr auto simd_level_name(simd::SimdLevel level) -> const char * {
+constexpr
+auto simd_level_name(simd::SimdLevel level) -> const char * {
     switch (level) {
         case simd::SimdLevel::OFF:
             return "OFF";
@@ -54,7 +55,8 @@ constexpr auto simd_level_name(simd::SimdLevel level) -> const char * {
 }
 
 // Benchmark-name suffix of each Neo output, short enough for --benchmark_filter patterns.
-constexpr auto output_key(NeoOutput output) -> const char * {
+constexpr
+auto output_key(NeoOutput output) -> const char * {
     switch (output) {
         case NeoOutput::Strings:
             return "strings";

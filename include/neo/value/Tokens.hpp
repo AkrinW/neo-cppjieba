@@ -23,15 +23,14 @@ namespace detail {
 
 // Untagged and tagged results share storage and iteration; only the stored record and its view differ.
 template <CharType CharT>
-[[nodiscard]]
-constexpr auto make_token_view(std::basic_string_view<CharT> source, const TokenPosition &position) noexcept
-    -> TokenView<CharT> {
+[[nodiscard]] constexpr
+auto make_token_view(std::basic_string_view<CharT> source, const TokenPosition &position) noexcept -> TokenView<CharT> {
     return {position.source.slice(source), position};
 }
 
 template <CharType CharT>
-[[nodiscard]]
-constexpr auto make_token_view(std::basic_string_view<CharT> source, const TaggedPosition &tagged) noexcept
+[[nodiscard]] constexpr
+auto make_token_view(std::basic_string_view<CharT> source, const TaggedPosition &tagged) noexcept
     -> TaggedTokenView<CharT> {
     return {tagged.position.source.slice(source), tagged.position, tagged.tag};
 }

@@ -14,7 +14,8 @@ enum class CutMode : uint8_t { MIX, MIX_NO_HMM, FULL, SEARCH, SEARCH_NO_HMM, HMM
 namespace detail {
 
 // Public entry points accept only named segmentation modes.
-constexpr auto valid_cut_mode(CutMode mode) noexcept -> bool {
+constexpr
+auto valid_cut_mode(CutMode mode) noexcept -> bool {
     switch (mode) {
         case CutMode::MIX:
         case CutMode::MIX_NO_HMM:
@@ -29,7 +30,8 @@ constexpr auto valid_cut_mode(CutMode mode) noexcept -> bool {
 }
 
 // Mode values supplied by callers are configuration errors, not internal invariants.
-inline auto check_cut_mode(CutMode mode) -> void {
+inline
+auto check_cut_mode(CutMode mode) -> void {
     check(valid_cut_mode(mode), "Unknown Jieba cut mode {}", std::to_underlying(mode));
 }
 

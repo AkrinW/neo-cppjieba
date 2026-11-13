@@ -26,8 +26,8 @@ inline constexpr auto DEFAULT_SEPARATORS = std::array<char32_t, 5>{
 
 // is_default_separator checks whether a rune is one of the DEFAULT_SEPARATORS
 // using a simple linear scan — optimal for a set this small (5 elements).
-[[nodiscard]]
-constexpr auto is_default_separator(char32_t r) noexcept -> bool {
+[[nodiscard]] constexpr
+auto is_default_separator(char32_t r) noexcept -> bool {
     for (auto &&s : DEFAULT_SEPARATORS) {
         if (s == r) {
             return true;
@@ -38,8 +38,8 @@ constexpr auto is_default_separator(char32_t r) noexcept -> bool {
 
 // is_default_separator_unlikely is a variant of is_default_separator that hints to the compiler that the condition is
 // unlikely to be true.
-[[nodiscard]]
-constexpr auto is_default_separator_unlikely(char32_t r) noexcept -> bool {
+[[nodiscard]] constexpr
+auto is_default_separator_unlikely(char32_t r) noexcept -> bool {
     if (r <= 32) [[unlikely]] {
         // Bits set for tab(9), newline(10), space(32).
         constexpr auto bitmask = uint64_t{(1ULL << 9) | (1ULL << 10) | (1ULL << 32)};
@@ -50,8 +50,8 @@ constexpr auto is_default_separator_unlikely(char32_t r) noexcept -> bool {
 
 // is_default_separator_branchless is a branchless variant of is_default_separator.
 // It avoids if/else so the compiler can auto-vectorize loops that call it.
-[[nodiscard]]
-constexpr auto is_default_separator_branchless(char32_t r) noexcept -> bool {
+[[nodiscard]] constexpr
+auto is_default_separator_branchless(char32_t r) noexcept -> bool {
     // low-range: tab(9), newline(10), space(32) — use bitmask
     auto low = (r <= 32) & (((uint64_t{(1ULL << 9) | (1ULL << 10) | (1ULL << 32)} >> (r & 63)) & 1) != 0);
     // high-range: 。(0x3002) or ，(0xFF0C)
@@ -62,7 +62,8 @@ constexpr auto is_default_separator_branchless(char32_t r) noexcept -> bool {
 // get_pre_filter_separators scans the input runes and returns a vector of indices where DEFAULT_SEPARATORS occur.
 // it is tested to be a speedup for pre-filtering when compared with iterator method, avoids repeated boundary searches
 // and improves cache locality. produces reusable indices for downstream slicing without re-scanning.
-inline auto get_pre_filter_separators(std::span<const char32_t> runes, std::vector<RuneIndex> &out) -> void {
+inline
+auto get_pre_filter_separators(std::span<const char32_t> runes, std::vector<RuneIndex> &out) -> void {
     assert_check([&] { return detail::size_fits_capacity<RuneIndex>(runes.size()); },
                  "Separator input has {} runes, exceeding the supported index range", runes.size());
     auto n = static_cast<RuneIndex>(runes.size());
@@ -79,7 +80,8 @@ inline auto get_pre_filter_separators(std::span<const char32_t> runes, std::vect
 }
 
 // Convenience overload; segmenters use the output-parameter form to reuse workspace storage.
-inline auto get_pre_filter_separators(std::span<const char32_t> runes) -> std::vector<RuneIndex> {
+inline
+auto get_pre_filter_separators(std::span<const char32_t> runes) -> std::vector<RuneIndex> {
     auto out = std::vector<RuneIndex>{};
     get_pre_filter_separators(runes, out);
     return out;

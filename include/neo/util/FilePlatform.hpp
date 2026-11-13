@@ -48,18 +48,21 @@ inline constexpr auto kErrorMessageCapacity = size_t{256};
 
 #ifndef _WIN32
 // GNU strerror_r returns the message, which may be a static string rather than the buffer.
-inline auto strerror_text(const char *message, std::span<const char> /*buffer*/) noexcept -> std::string_view {
+inline
+auto strerror_text(const char *message, std::span<const char> /*buffer*/) noexcept -> std::string_view {
     return message;
 }
 
 // XSI strerror_r fills the buffer and returns zero on success.
-inline auto strerror_text(int status, std::span<const char> buffer) noexcept -> std::string_view {
+inline
+auto strerror_text(int status, std::span<const char> buffer) noexcept -> std::string_view {
     return status == 0 ? std::string_view{buffer.data()} : std::string_view{"Unknown error"};
 }
 #endif
 
 // Write the platform text for an error code into the buffer without allocating; the view borrows the buffer.
-inline auto error_message_text(const ErrorMessage &error, std::span<char, kErrorMessageCapacity> buffer) noexcept
+inline
+auto error_message_text(const ErrorMessage &error, std::span<char, kErrorMessageCapacity> buffer) noexcept
     -> std::string_view {
 #ifdef _WIN32
     if (error.category == ErrorCategory::System) {
@@ -104,7 +107,8 @@ struct SystemStatus {
 inline constexpr auto kSystemSuccess = SystemStatus{true, ErrorMessage{ErrorCategory::Generic, 0}};
 
 // Capture errno as the status of a CRT or POSIX call; read it immediately after the call.
-inline auto errno_status(bool succeeded) noexcept -> SystemStatus {
+inline
+auto errno_status(bool succeeded) noexcept -> SystemStatus {
     return succeeded ? kSystemSuccess : SystemStatus{false, ErrorMessage{ErrorCategory::Generic, errno}};
 }
 
@@ -122,18 +126,21 @@ struct DescriptorResult {
 
 #ifdef _WIN32
 // Capture GetLastError as the status of a Win32 call; read it immediately after the call.
-inline auto win32_status(BOOL result) noexcept -> SystemStatus {
+inline
+auto win32_status(BOOL result) noexcept -> SystemStatus {
     return result != 0 ? kSystemSuccess
                        : SystemStatus{false, ErrorMessage{ErrorCategory::System, static_cast<int>(::GetLastError())}};
 }
 
 // The Win32 handle behind a CRT descriptor, for APIs that report errors without the CRT invalid-parameter handler.
-inline auto native_handle(int fd) noexcept -> HANDLE {
+inline
+auto native_handle(int fd) noexcept -> HANDLE {
     return reinterpret_cast<HANDLE>(::_get_osfhandle(fd));
 }
 
 // Public file paths are UTF-8; the Windows filesystem API accepts UTF-16.
-inline auto windows_file_path(std::string_view path) -> std::wstring {
+inline
+auto windows_file_path(std::string_view path) -> std::wstring {
     if (path.empty()) {
         return {};
     }
@@ -149,7 +156,8 @@ inline auto windows_file_path(std::string_view path) -> std::wstring {
 }
 
 // Preserve subsecond write and metadata-change timestamps, which _stat64 does not expose.
-inline auto file_timestamps(int fd, std::string_view path) -> FILE_BASIC_INFO {
+inline
+auto file_timestamps(int fd, std::string_view path) -> FILE_BASIC_INFO {
     auto info = FILE_BASIC_INFO{};
     const auto handle = reinterpret_cast<HANDLE>(::_get_osfhandle(fd));
     const auto result = ::GetFileInformationByHandleEx(handle, FileBasicInfo, &info, sizeof(info));
@@ -160,7 +168,8 @@ inline auto file_timestamps(int fd, std::string_view path) -> FILE_BASIC_INFO {
 #endif
 
 // Close the owning CRT/POSIX descriptor without retrying a potentially reused descriptor.
-inline auto close_file_descriptor(int fd) noexcept -> int {
+inline
+auto close_file_descriptor(int fd) noexcept -> int {
 #ifdef _WIN32
     return ::_close(fd);
 #else
@@ -170,7 +179,8 @@ inline auto close_file_descriptor(int fd) noexcept -> int {
 
 // Read once into the buffer, capped at the platform's per-call limit and retrying interrupted POSIX reads.
 // Zero bytes with a successful status means end of file.
-inline auto read_some(int fd, std::span<char> buffer) noexcept -> TransferResult {
+inline
+auto read_some(int fd, std::span<char> buffer) noexcept -> TransferResult {
 #ifdef _WIN32
     const auto count =
         static_cast<DWORD>(std::min(buffer.size(), static_cast<size_t>(std::numeric_limits<DWORD>::max())));
@@ -190,7 +200,8 @@ inline auto read_some(int fd, std::span<char> buffer) noexcept -> TransferResult
 }
 
 // Fill owned storage, retrying interrupted reads and reporting I/O errors or premature EOF through check.
-inline auto read_file_contents(int fd, std::span<char> destination, std::string_view path) -> void {
+inline
+auto read_file_contents(int fd, std::span<char> destination, std::string_view path) -> void {
     assert_check([fd] { return fd >= 0; }, "FileBuffer: invalid internal file descriptor");
 
     auto offset = size_t{0};
@@ -217,7 +228,8 @@ inline constexpr auto kPathSeparators = std::string_view{"/"};
 #endif
 
 // Convert a UTF-8 path that has no embedded null byte.
-inline auto native_path(std::string_view path) -> NativePath {
+inline
+auto native_path(std::string_view path) -> NativePath {
     assert_check([&] { return path.find('\0') == std::string_view::npos; }, "FileReplace: unchecked file path");
 #ifdef _WIN32
     return windows_file_path(path);
@@ -227,7 +239,8 @@ inline auto native_path(std::string_view path) -> NativePath {
 }
 
 // Open a binary input descriptor without throwing; the caller reports a failed status.
-inline auto open_for_reading(const NativePath &path) noexcept -> DescriptorResult {
+inline
+auto open_for_reading(const NativePath &path) noexcept -> DescriptorResult {
 #ifdef _WIN32
     const auto fd = ::_wopen(path.c_str(), _O_RDONLY | _O_BINARY | _O_NOINHERIT);
 #else
@@ -238,7 +251,8 @@ inline auto open_for_reading(const NativePath &path) noexcept -> DescriptorResul
 }
 
 // Open an independent binary input descriptor; ownership transfers to the caller.
-inline auto open_file(std::string_view path) -> int {
+inline
+auto open_file(std::string_view path) -> int {
     check(path.find('\0') == std::string_view::npos, "FileBuffer: file path contains an embedded null byte");
 
     // open(2) requires a null-terminated path
@@ -276,7 +290,8 @@ struct MetadataResult {
 
 // Query size, file type, and timestamps of an open descriptor. Windows reads subsecond timestamps separately and
 // reports their failure through check; the path only labels that diagnostic.
-inline auto native_file_metadata(int fd, [[maybe_unused]] std::string_view path) -> MetadataResult {
+inline
+auto native_file_metadata(int fd, [[maybe_unused]] std::string_view path) -> MetadataResult {
 #ifdef _WIN32
     struct ::_stat64 st{};
     if (::_fstat64(fd, &st) != 0) {
@@ -318,7 +333,8 @@ inline auto native_file_metadata(int fd, [[maybe_unused]] std::string_view path)
 }
 
 // Capture metadata from an open descriptor; external I/O errors follow the configured check path.
-inline auto file_metadata(int fd, std::string_view path, FileReadPhase phase) -> FileMetadata {
+inline
+auto file_metadata(int fd, std::string_view path, FileReadPhase phase) -> FileMetadata {
     assert_check([fd] { return fd >= 0; }, "FileBuffer: invalid internal file descriptor");
     const auto result = native_file_metadata(fd, path);
     check(result.status.succeeded, "FileBuffer: failed to stat file{}: {}: {}",
@@ -335,7 +351,8 @@ struct FileLocation {
 };
 
 // A path without a separator names a file in the current directory.
-inline auto split_file_path(std::string_view path) -> FileLocation {
+inline
+auto split_file_path(std::string_view path) -> FileLocation {
     const auto split = path.find_last_of(kPathSeparators);
     if (split == std::string_view::npos) {
         return {{}, std::string{path}, "."};
@@ -346,7 +363,8 @@ inline auto split_file_path(std::string_view path) -> FileLocation {
 
 // Create a file that must not exist yet, for writing; returns -1 with errno set on failure, EEXIST when the name
 // is taken. The file gets the default permissions of any newly created file.
-inline auto try_create_new_file(const NativePath &path) -> int {
+inline
+auto try_create_new_file(const NativePath &path) -> int {
 #ifdef _WIN32
     return ::_wopen(path.c_str(), _O_WRONLY | _O_CREAT | _O_EXCL | _O_BINARY | _O_NOINHERIT, _S_IREAD | _S_IWRITE);
 #else
@@ -356,7 +374,8 @@ inline auto try_create_new_file(const NativePath &path) -> int {
 }
 
 // Write once from the buffer, capped at the platform's per-call limit and retrying interrupted POSIX writes.
-inline auto write_some(int fd, std::span<const std::byte> buffer) noexcept -> TransferResult {
+inline
+auto write_some(int fd, std::span<const std::byte> buffer) noexcept -> TransferResult {
 #ifdef _WIN32
     const auto count =
         static_cast<DWORD>(std::min(buffer.size(), static_cast<size_t>(std::numeric_limits<DWORD>::max())));
@@ -375,7 +394,8 @@ inline auto write_some(int fd, std::span<const std::byte> buffer) noexcept -> Tr
 }
 
 // Write every byte, retrying interrupted and short writes; I/O errors are reported through check.
-inline auto write_file_contents(int fd, std::span<const std::byte> source, std::string_view path) -> void {
+inline
+auto write_file_contents(int fd, std::span<const std::byte> source, std::string_view path) -> void {
     assert_check([fd] { return fd >= 0; }, "FileReplace: invalid internal file descriptor");
 
     auto offset = size_t{0};
@@ -388,7 +408,8 @@ inline auto write_file_contents(int fd, std::span<const std::byte> source, std::
 }
 
 // Flush a descriptor's written data to storage, retrying interrupted POSIX syncs.
-inline auto flush_to_storage(int fd) noexcept -> SystemStatus {
+inline
+auto flush_to_storage(int fd) noexcept -> SystemStatus {
 #ifdef _WIN32
     return win32_status(::FlushFileBuffers(native_handle(fd)));
 #else
@@ -407,14 +428,16 @@ inline auto flush_to_storage(int fd) noexcept -> SystemStatus {
 }
 
 // Flush written data to storage before the file becomes visible under its final name.
-inline auto sync_file(int fd, std::string_view path) -> void {
+inline
+auto sync_file(int fd, std::string_view path) -> void {
     assert_check([fd] { return fd >= 0; }, "FileReplace: invalid internal file descriptor");
     const auto status = flush_to_storage(fd);
     check(status.succeeded, "FileReplace: failed to flush file: {}: {}", path, status.error);
 }
 
 // Move a file over a destination, replacing any existing file there; Windows also writes the move through.
-inline auto replace_file(const NativePath &from, const NativePath &to) noexcept -> SystemStatus {
+inline
+auto replace_file(const NativePath &from, const NativePath &to) noexcept -> SystemStatus {
 #ifdef _WIN32
     return win32_status(::MoveFileExW(from.c_str(), to.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH));
 #else
@@ -424,14 +447,16 @@ inline auto replace_file(const NativePath &from, const NativePath &to) noexcept 
 
 // Atomically move a file over a destination in the same directory, replacing any existing file there.
 // The UTF-8 path only labels diagnostics.
-inline auto rename_over(const NativePath &from, const NativePath &to, std::string_view path) -> void {
+inline
+auto rename_over(const NativePath &from, const NativePath &to, std::string_view path) -> void {
     const auto status = replace_file(from, to);
     check(status.succeeded, "FileReplace: failed to replace file: {}: {}", path, status.error);
 }
 
 // Persist the directory entry a rename changed; MOVEFILE_WRITE_THROUGH already did so on Windows.
 // File systems that cannot sync directories report EINVAL, leaving the rename as durable as they make it.
-inline auto sync_directory(std::string_view directory, std::string_view path) -> void {
+inline
+auto sync_directory(std::string_view directory, std::string_view path) -> void {
 #ifdef _WIN32
     static_cast<void>(directory);
     static_cast<void>(path);
@@ -449,7 +474,8 @@ inline auto sync_directory(std::string_view directory, std::string_view path) ->
 }
 
 // Remove a file during cleanup; failures are ignored because the original error is already being reported.
-inline auto remove_file(const NativePath &path) noexcept -> void {
+inline
+auto remove_file(const NativePath &path) noexcept -> void {
 #ifdef _WIN32
     static_cast<void>(::_wunlink(path.c_str()));
 #else

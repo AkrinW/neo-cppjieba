@@ -13,7 +13,8 @@
 
 using namespace cppjieba;
 namespace {
-static void Cut(size_t times = 50) {
+static
+void Cut(size_t times = 50) {
     MixSegment seg(DICT_DIR "/jieba.dict.utf8", DICT_DIR "/hmm_model.utf8");
     vector<string> res;
     string doc;
@@ -33,7 +34,8 @@ static void Cut(size_t times = 50) {
                          static_cast<double>(endTime - beginTime) / CLOCKS_PER_SEC);
 }
 
-static void Extract(size_t times = 400) {
+static
+void Extract(size_t times = 400) {
     KeywordExtractor Extractor(DICT_DIR "/jieba.dict.utf8", DICT_DIR "/hmm_model.utf8", DICT_DIR "/idf.utf8",
                                DICT_DIR "/stop_words.utf8");
     vector<string> words;

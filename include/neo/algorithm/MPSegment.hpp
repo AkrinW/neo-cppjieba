@@ -27,8 +27,8 @@ enum class MPMatchMode : uint8_t { PathOnly, Search };
 /// for_each_edge(begin, emit) calls emit(end, weight) for every candidate word [begin, end);
 /// kMissingWordWeight marks an unknown single rune, which scores with the dictionary fallback.
 template <RouteEdges ForEachEdge>
-inline auto mp_build_route(const DictTrie &dict, size_t n, const ForEachEdge &for_each_edge, SegmentScratch &scratch)
-    -> void {
+inline
+auto mp_build_route(const DictTrie &dict, size_t n, const ForEachEdge &for_each_edge, SegmentScratch &scratch) -> void {
     assert(size_fits_capacity<RuneIndex>(n));
     if (n == 0) {
         return;
@@ -85,8 +85,8 @@ inline auto mp_build_route(const DictTrie &dict, size_t n, const ForEachEdge &fo
 /// Build the MP route of a separator-free segment directly from trie matches, without materializing a DAG.
 /// Search mode also records two- and three-rune dictionary membership at every start position.
 template <MPMatchMode mode>
-inline auto mp_build_route_from_matches(const DictTrie &dict, std::span<const Rune> runes, SegmentScratch &scratch)
-    -> void {
+inline
+auto mp_build_route_from_matches(const DictTrie &dict, std::span<const Rune> runes, SegmentScratch &scratch) -> void {
     if constexpr (mode == MPMatchMode::Search) {
         if (scratch.search_subwords.size() < runes.size()) {
             scratch.search_subwords.resize(runes.size());
@@ -118,7 +118,8 @@ inline auto mp_build_route_from_matches(const DictTrie &dict, std::span<const Ru
 
 /// Visit the route built for an n-rune segment as local word ranges, in input order.
 template <WordEmitter Emit>
-inline auto mp_emit_route(size_t n, const Emit &emit, const SegmentScratch &scratch) -> void {
+inline
+auto mp_emit_route(size_t n, const Emit &emit, const SegmentScratch &scratch) -> void {
     assert(scratch.route.size() >= n);
     const auto &route = scratch.route;
     for (auto begin = RuneIndex{0}; begin < n;) {
@@ -130,8 +131,9 @@ inline auto mp_emit_route(size_t n, const Emit &emit, const SegmentScratch &scra
 }
 
 /// Append MP segmentation results at global offset pos, keeping separator runes as standalone tokens.
-inline auto mp_cut_append(const DictTrie &dict, std::span<const Rune> runes, RuneIndex pos, std::vector<WordRange> &out,
-                          SegmentScratch &scratch) -> void {
+inline
+auto mp_cut_append(const DictTrie &dict, std::span<const Rune> runes, RuneIndex pos, std::vector<WordRange> &out,
+                   SegmentScratch &scratch) -> void {
     assert_check([&] { return runes.size() <= static_cast<RuneIndex>(std::numeric_limits<RuneIndex>::max() - pos); },
                  "MPSegment: global word offsets overflow");
     const auto appended_begin = out.size();
@@ -169,8 +171,9 @@ inline auto mp_cut_append(const DictTrie &dict, std::span<const Rune> runes, Run
 /// The input is split by default separators first; each separator is emitted as its own token.
 struct MPSegment {
     // Replace output while reusing scratch across every separator-free segment.
-    static auto cut_into(const DictTrie &dict, const HMModel &, std::span<const Rune> runes,
-                         std::vector<WordRange> &range, detail::SegmentScratch &scratch) -> void {
+    static
+    auto cut_into(const DictTrie &dict, const HMModel &, std::span<const Rune> runes, std::vector<WordRange> &range,
+                  detail::SegmentScratch &scratch) -> void {
         assert_check([&] { return detail::size_fits_capacity<RuneIndex>(runes.size()); },
                      "MPSegment: input exceeds the word-range limit");
         range.clear();

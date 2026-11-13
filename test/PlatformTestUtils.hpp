@@ -33,7 +33,8 @@ namespace test_platform {
 enum class FileMode { Read, Write, ReadWrite };
 
 // Open a native filesystem path; the test retains responsibility for closing the stream.
-inline auto open_binary_file(const std::filesystem::path &path, FileMode mode) -> std::FILE * {
+inline
+auto open_binary_file(const std::filesystem::path &path, FileMode mode) -> std::FILE * {
     const auto index = static_cast<size_t>(mode);
 #ifdef _WIN32
     constexpr auto modes = std::array{L"rb", L"wb", L"w+b"};
@@ -47,7 +48,8 @@ inline auto open_binary_file(const std::filesystem::path &path, FileMode mode) -
 }
 
 // Obtain the descriptor shared by stdio and the platform's unbuffered I/O API.
-inline auto file_descriptor(std::FILE *file) noexcept -> int {
+inline
+auto file_descriptor(std::FILE *file) noexcept -> int {
     assert(file != nullptr);
 #ifdef _WIN32
     return ::_fileno(file);
@@ -57,7 +59,8 @@ inline auto file_descriptor(std::FILE *file) noexcept -> int {
 }
 
 // Preserve a descriptor while stderr is redirected by a logging test.
-inline auto duplicate_descriptor(int fd) noexcept -> int {
+inline
+auto duplicate_descriptor(int fd) noexcept -> int {
 #ifdef _WIN32
     return ::_dup(fd);
 #else
@@ -66,7 +69,8 @@ inline auto duplicate_descriptor(int fd) noexcept -> int {
 }
 
 // Replace a descriptor, normalizing the different successful dup2 return values.
-inline auto replace_descriptor(int source, int destination) noexcept -> bool {
+inline
+auto replace_descriptor(int source, int destination) noexcept -> bool {
 #ifdef _WIN32
     return ::_dup2(source, destination) != -1;
 #else
@@ -75,7 +79,8 @@ inline auto replace_descriptor(int source, int destination) noexcept -> bool {
 }
 
 // Windows tmpfile can require root-directory access; remember its explicit temporary directory instead.
-inline auto open_temporary_file(std::filesystem::path &directory) -> std::FILE * {
+inline
+auto open_temporary_file(std::filesystem::path &directory) -> std::FILE * {
 #ifdef _WIN32
     directory = create_temp_directory("neo-log-capture-");
     return open_binary_file(directory / "stderr", FileMode::ReadWrite);
@@ -86,7 +91,8 @@ inline auto open_temporary_file(std::filesystem::path &directory) -> std::FILE *
 }
 
 // Remove temporary capture storage after its stream has been closed, including failed opens.
-inline auto close_temporary_file(std::FILE *file, const std::filesystem::path &directory) -> void {
+inline
+auto close_temporary_file(std::FILE *file, const std::filesystem::path &directory) -> void {
     if (file != nullptr) {
         std::fclose(file);
     }
@@ -96,7 +102,8 @@ inline auto close_temporary_file(std::FILE *file, const std::filesystem::path &d
 }
 
 // Match the native error domain used when reading a write-only descriptor.
-inline auto write_only_read_error() noexcept -> std::error_code {
+inline
+auto write_only_read_error() noexcept -> std::error_code {
 #ifdef _WIN32
     return {ERROR_ACCESS_DENIED, std::system_category()};
 #else
@@ -105,7 +112,8 @@ inline auto write_only_read_error() noexcept -> std::error_code {
 }
 
 // The native code a Win32 API or POSIX call reports for a missing file.
-inline auto missing_file_system_error() noexcept -> int {
+inline
+auto missing_file_system_error() noexcept -> int {
 #ifdef _WIN32
     return static_cast<int>(ERROR_FILE_NOT_FOUND);
 #else
@@ -114,7 +122,8 @@ inline auto missing_file_system_error() noexcept -> int {
 }
 
 // Disable POSIX core dumps inside the subprocess that tests external file truncation.
-inline auto prepare_fileio_death_test() noexcept -> void {
+inline
+auto prepare_fileio_death_test() noexcept -> void {
 #ifndef _WIN32
     const auto core_limit = ::rlimit{};
     if (::setrlimit(RLIMIT_CORE, &core_limit) != 0) {
@@ -125,7 +134,8 @@ inline auto prepare_fileio_death_test() noexcept -> void {
 
 // POSIX readers keep the file they opened after a rename replaces its name; Windows refuses to replace a file
 // that a reader opened without FILE_SHARE_DELETE.
-inline auto replacement_keeps_open_readers() noexcept -> bool {
+inline
+auto replacement_keeps_open_readers() noexcept -> bool {
 #ifdef _WIN32
     return false;
 #else
@@ -134,7 +144,8 @@ inline auto replacement_keeps_open_readers() noexcept -> bool {
 }
 
 // UTF-8 validation is specific to Windows path conversion; POSIX accepts arbitrary path bytes.
-inline auto expect_invalid_utf8_path_rejected() -> void {
+inline
+auto expect_invalid_utf8_path_rejected() -> void {
 #ifdef _WIN32
     EXPECT_THROW(neo_cppjieba::detail::read_file(std::string_view{"\xff"}), neo_cppjieba::LogConfig::Exception);
 #else
@@ -143,7 +154,8 @@ inline auto expect_invalid_utf8_path_rejected() -> void {
 }
 
 // POSIX permits opening directories, which exercises constructor cleanup after a successful open.
-inline auto expect_rejected_directory_closes_descriptor(const std::filesystem::path &directory) -> void {
+inline
+auto expect_rejected_directory_closes_descriptor(const std::filesystem::path &directory) -> void {
 #ifdef _WIN32
     (void)directory;
     GTEST_SKIP() << "Windows rejects directories during open";
@@ -164,7 +176,8 @@ inline auto expect_rejected_directory_closes_descriptor(const std::filesystem::p
 }
 
 // Exercise nonblocking FIFO rejection only on platforms that provide POSIX FIFOs.
-inline auto expect_fifo_rejected_without_waiting(const std::filesystem::path &fifo) -> void {
+inline
+auto expect_fifo_rejected_without_waiting(const std::filesystem::path &fifo) -> void {
 #ifdef _WIN32
     (void)fifo;
     GTEST_SKIP() << "Requires POSIX FIFOs";

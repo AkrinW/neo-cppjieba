@@ -22,8 +22,9 @@ using namespace neo_cppjieba::detail;
 namespace detail {
 
 template <bool hmm>
-inline auto append_sub_words_by_lookup(const DictTrie &dict, std::span<const Rune> runes, WordRange word,
-                                       std::vector<WordRange> &result) -> void {
+inline
+auto append_sub_words_by_lookup(const DictTrie &dict, std::span<const Rune> runes, WordRange word,
+                                std::vector<WordRange> &result) -> void {
     auto len = word.size();
 
     if (len > 2) {
@@ -49,7 +50,8 @@ inline auto append_sub_words_by_lookup(const DictTrie &dict, std::span<const Run
     result.push_back(word);
 }
 
-inline auto has_dag_edge(const Dag &dag, RuneIndex begin, RuneIndex end) -> bool {
+inline
+auto has_dag_edge(const Dag &dag, RuneIndex begin, RuneIndex end) -> bool {
     for (auto &&edge : dag.get_edges(begin)) {
         if (edge.next_pos == end) {
             return true;
@@ -58,8 +60,9 @@ inline auto has_dag_edge(const Dag &dag, RuneIndex begin, RuneIndex end) -> bool
     return false;
 }
 
-inline auto append_sub_words_from_dag(const Dag &dag, RuneIndex segment_offset, WordRange word,
-                                      std::vector<WordRange> &result) -> void {
+inline
+auto append_sub_words_from_dag(const Dag &dag, RuneIndex segment_offset, WordRange word, std::vector<WordRange> &result)
+    -> void {
     auto len = word.size();
     auto local_begin = word.begin - segment_offset;
 
@@ -89,7 +92,8 @@ inline auto append_sub_words_from_dag(const Dag &dag, RuneIndex segment_offset, 
 }
 
 // Reference MP over a materialized DAG: the library builds the same route directly from trie matches.
-inline auto mp_words_from_dag(const DictTrie &dict, const Dag &dag) -> std::vector<WordRange> {
+inline
+auto mp_words_from_dag(const DictTrie &dict, const Dag &dag) -> std::vector<WordRange> {
     auto scratch = neo_cppjieba::detail::SegmentScratch{};
     const auto for_each_edge = [&](RuneIndex begin, const auto &emit) {
         for (const auto &edge : dag.get_edges(begin)) {
@@ -103,9 +107,9 @@ inline auto mp_words_from_dag(const DictTrie &dict, const Dag &dag) -> std::vect
 }
 
 template <bool hmm>
-inline auto append_mix_words(const DictTrie &dict, const HMModel &model, std::vector<WordRange> &result,
-                             const std::vector<WordRange> &mp_words, std::span<const Rune> runes, RuneIndex pos)
-    -> void {
+inline
+auto append_mix_words(const DictTrie &dict, const HMModel &model, std::vector<WordRange> &result,
+                      const std::vector<WordRange> &mp_words, std::span<const Rune> runes, RuneIndex pos) -> void {
     if constexpr (!hmm) {
         for (const auto &word : mp_words) {
             result.push_back(
@@ -157,7 +161,8 @@ struct BufferedMixResult {
 };
 
 template <bool hmm>
-inline auto mix_cut_with_dag_buffered(const DictTrie &dict, const HMModel &model, std::span<const Rune> runes)
+inline
+auto mix_cut_with_dag_buffered(const DictTrie &dict, const HMModel &model, std::span<const Rune> runes)
     -> BufferedMixResult<hmm> {
     auto result = BufferedMixResult<hmm>{};
     result.words.reserve(runes.size() / 2);
@@ -186,7 +191,8 @@ inline auto mix_cut_with_dag_buffered(const DictTrie &dict, const HMModel &model
 }
 
 template <bool hmm>
-inline auto query_cut_with_requery(const DictTrie &dict, const HMModel &model, std::span<const Rune> runes)
+inline
+auto query_cut_with_requery(const DictTrie &dict, const HMModel &model, std::span<const Rune> runes)
     -> std::vector<WordRange> {
     auto mix_words = cut<MixSegment<hmm>>(dict, model, runes);
     auto result = std::vector<WordRange>{};
@@ -200,7 +206,8 @@ inline auto query_cut_with_requery(const DictTrie &dict, const HMModel &model, s
 }
 
 template <bool hmm>
-inline auto query_cut_with_buffered_dag(const DictTrie &dict, const HMModel &model, std::span<const Rune> runes)
+inline
+auto query_cut_with_buffered_dag(const DictTrie &dict, const HMModel &model, std::span<const Rune> runes)
     -> std::vector<WordRange> {
     auto mix_result = mix_cut_with_dag_buffered<hmm>(dict, model, runes);
     auto result = std::vector<WordRange>{};
@@ -233,13 +240,15 @@ inline auto query_cut_with_buffered_dag(const DictTrie &dict, const HMModel &mod
 } // namespace detail
 
 template <bool hmm = true>
-inline auto query_cut_requery(const DictTrie &dict, const HMModel &model, std::span<const Rune> runes)
+inline
+auto query_cut_requery(const DictTrie &dict, const HMModel &model, std::span<const Rune> runes)
     -> std::vector<WordRange> {
     return detail::query_cut_with_requery<hmm>(dict, model, runes);
 }
 
 template <bool hmm = true>
-inline auto query_cut_buffered_dag(const DictTrie &dict, const HMModel &model, std::span<const Rune> runes)
+inline
+auto query_cut_buffered_dag(const DictTrie &dict, const HMModel &model, std::span<const Rune> runes)
     -> std::vector<WordRange> {
     return detail::query_cut_with_buffered_dag<hmm>(dict, model, runes);
 }

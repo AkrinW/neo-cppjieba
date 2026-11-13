@@ -31,12 +31,14 @@ inline constexpr auto modes = std::array<neo_jieba_mode_v1, 7>{
     NEO_JIEBA_V1_SEARCH_NO_HMM, NEO_JIEBA_V1_HMM,        NEO_JIEBA_V1_MP};
 
 // Full and search modes may emit overlapping ranges; every other mode tiles the input with adjacent ranges.
-inline auto tiles_input(neo_jieba_mode_v1 mode) -> bool {
+inline
+auto tiles_input(neo_jieba_mode_v1 mode) -> bool {
     return mode != NEO_JIEBA_V1_FULL && mode != NEO_JIEBA_V1_SEARCH && mode != NEO_JIEBA_V1_SEARCH_NO_HMM;
 }
 
 // Load the repository dictionaries once; libFuzzer runs every input in this process.
-inline auto repository_engine() -> const neo_jieba_engine_v1 * {
+inline
+auto repository_engine() -> const neo_jieba_engine_v1 * {
     static const auto *const owned = [] {
         const auto paths = neo_jieba_paths_v1{DICT_DIR "/jieba.dict.utf8", DICT_DIR "/hmm_model.utf8", ""};
         neo_jieba_engine_v1 *created = nullptr;
@@ -47,12 +49,14 @@ inline auto repository_engine() -> const neo_jieba_engine_v1 * {
 }
 
 // Describe borrowed contents as a C memory source.
-inline auto memory_source(std::string_view text) -> neo_jieba_source_v1 {
+inline
+auto memory_source(std::string_view text) -> neo_jieba_source_v1 {
     return {NEO_JIEBA_V1_SOURCE_MEMORY, 0, text.data(), text.size()};
 }
 
 // Describe a NUL-free path as a C file source; the path text must outlive the call that reads it.
-inline auto file_source(std::string_view path) -> neo_jieba_source_v1 {
+inline
+auto file_source(std::string_view path) -> neo_jieba_source_v1 {
     return {NEO_JIEBA_V1_SOURCE_FILE, 0, path.data(), path.size()};
 }
 
@@ -64,13 +68,15 @@ auto borrowed(const T *data, std::uint64_t count) -> std::span<const T> {
 }
 
 // A tag is NUL-padded when no byte follows its first NUL.
-inline auto is_padded_tag(const neo_jieba_pos_tag_v1 &tag) -> bool {
+inline
+auto is_padded_tag(const neo_jieba_pos_tag_v1 &tag) -> bool {
     return std::all_of(std::ranges::find(tag.data, '\0'), std::ranges::end(tag.data),
                        [](char byte) { return byte == '\0'; });
 }
 
 // Tags compare by all four bytes, so padding differences count.
-inline auto same_tag(const neo_jieba_pos_tag_v1 &left, const neo_jieba_pos_tag_v1 &right) -> bool {
+inline
+auto same_tag(const neo_jieba_pos_tag_v1 &left, const neo_jieba_pos_tag_v1 &right) -> bool {
     return std::ranges::equal(left.data, right.data);
 }
 
@@ -116,21 +122,24 @@ private:
 };
 
 // Create a reusable workspace; creation only fails when memory runs out.
-inline auto make_workspace() -> WorkspaceOwner {
+inline
+auto make_workspace() -> WorkspaceOwner {
     neo_jieba_workspace_v1 *created = nullptr;
     require(neo_jieba_v1_workspace_create(&created, nullptr) == NEO_JIEBA_V1_OK, "workspace_create failed");
     return {created, neo_jieba_v1_workspace_destroy};
 }
 
 // Create an empty reusable ranges result; creation only fails when memory runs out.
-inline auto make_ranges() -> RangesOwner {
+inline
+auto make_ranges() -> RangesOwner {
     neo_jieba_ranges_v1 *created = nullptr;
     require(neo_jieba_v1_ranges_create(&created, nullptr) == NEO_JIEBA_V1_OK, "ranges_create failed");
     return {created, neo_jieba_v1_ranges_destroy};
 }
 
 // Cut input into an owned result and copy its ranges; the caller has checked that input is valid UTF-8.
-inline auto owned_ranges(const neo_jieba_engine_v1 *engine, std::string_view input, neo_jieba_mode_v1 mode)
+inline
+auto owned_ranges(const neo_jieba_engine_v1 *engine, std::string_view input, neo_jieba_mode_v1 mode)
     -> std::vector<neo_jieba_token_range_v1> {
     neo_jieba_tokens_v1 *created = nullptr;
     require(neo_jieba_v1_cut_utf8_owned(engine, input.data(), input.size(), mode, &created, nullptr) == NEO_JIEBA_V1_OK,
@@ -144,6 +153,7 @@ inline auto owned_ranges(const neo_jieba_engine_v1 *engine, std::string_view inp
 }
 
 // Ranges compare by offset and length.
-inline auto same_range(const neo_jieba_token_range_v1 &left, const neo_jieba_token_range_v1 &right) -> bool {
+inline
+auto same_range(const neo_jieba_token_range_v1 &left, const neo_jieba_token_range_v1 &right) -> bool {
     return left.byte_offset == right.byte_offset && left.byte_length == right.byte_length;
 }

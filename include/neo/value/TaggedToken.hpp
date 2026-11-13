@@ -17,7 +17,8 @@ struct TaggedPosition {
     TokenPosition position{};
     PosTag tag;
 
-    constexpr auto operator==(const TaggedPosition &) const noexcept -> bool = default;
+    constexpr
+    auto operator==(const TaggedPosition &) const noexcept -> bool = default;
 };
 
 // An independent word and its tag, matching CppJieba's Tag pairs and Python jieba's posseg pairs.

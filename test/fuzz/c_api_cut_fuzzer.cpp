@@ -39,7 +39,8 @@ auto check_tokens(const neo_jieba_tokens_v1 *tokens, std::string_view input, neo
 } // namespace
 
 // The first byte selects the cut mode; the remaining bytes are the UTF-8 input.
-extern "C" auto LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size) -> int {
+extern
+"C" auto LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size) -> int {
     if (size == 0) {
         return 0;
     }

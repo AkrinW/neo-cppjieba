@@ -29,7 +29,8 @@
 namespace neo_cppjieba::detail {
 
 // Rune indices must fit WordRange, with room for the trailing offset sentinel.
-inline auto assert_rune_count(size_t rune_count) noexcept -> void {
+inline
+auto assert_rune_count(size_t rune_count) noexcept -> void {
     assert_check(
         [&] { return size_fits_capacity<RuneIndex>(rune_count) && rune_count < std::numeric_limits<size_t>::max(); },
         "Jieba: input has {} runes, exceeding the configured index range", rune_count);
@@ -63,8 +64,8 @@ using ActiveSegmentFamily = std::conditional_t<compile_config::segmentation_styl
                                                CppSegmentFamily, StyledSegmentFamily>;
 
 // Partition modes cover every rune once; full and search modes may emit overlapping words.
-[[nodiscard]]
-inline auto valid_segment_result(CutMode mode, std::span<const WordRange> words, size_t rune_count) noexcept -> bool {
+[[nodiscard]] inline
+auto valid_segment_result(CutMode mode, std::span<const WordRange> words, size_t rune_count) noexcept -> bool {
     if (mode == CutMode::MIX || mode == CutMode::MIX_NO_HMM || mode == CutMode::HMM || mode == CutMode::MP) {
         return valid_segment_partition(words, rune_count);
     }
@@ -84,8 +85,9 @@ inline auto valid_segment_result(CutMode mode, std::span<const WordRange> words,
 }
 
 // Replace out with the words of a validated mode; out and scratch keep their capacity.
-inline auto segment_into(const DictTrie &dict, const HMModel &model, std::span<const Rune> runes, CutMode mode,
-                         std::vector<WordRange> &out, SegmentScratch &scratch) -> void {
+inline
+auto segment_into(const DictTrie &dict, const HMModel &model, std::span<const Rune> runes, CutMode mode,
+                  std::vector<WordRange> &out, SegmentScratch &scratch) -> void {
     using Family = ActiveSegmentFamily;
     switch (mode) {
         case CutMode::MIX:

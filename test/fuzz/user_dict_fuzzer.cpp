@@ -20,7 +20,8 @@ constexpr auto main_dict = std::string_view{"北京 2000 ns\n清华大学 800 nt
 } // namespace
 
 // Malformed user dictionaries must be rejected through the checked exception; internal assertions stay fatal.
-extern "C" auto LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size) -> int {
+extern
+"C" auto LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size) -> int {
     const auto user_dicts = std::array{DictSource::memory(as_text(data, size))};
     try {
         const auto dict =

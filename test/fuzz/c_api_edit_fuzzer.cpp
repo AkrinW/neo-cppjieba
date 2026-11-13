@@ -129,7 +129,8 @@ auto check_added_tag(const neo_jieba_engine_v1 *engine, const Edit &edit) -> voi
 // The first byte picks the diagnostic capacity; the rest is a sequence of edits applied to a clone of the base.
 // Rejected edits and compact leave segmentation unchanged, removal reports words this sequence added or removed,
 // and the base engine cuts as before however its clone was edited.
-extern "C" auto LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size) -> int {
+extern
+"C" auto LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size) -> int {
     auto reader = ByteReader{data, size};
     auto error = ErrorProbe{reader.byte()};
     const auto edits = decode_edits(reader);

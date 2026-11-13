@@ -24,8 +24,9 @@ namespace neo_cppjieba::detail {
 /// word are also emitted as fallback tokens.
 struct FullSegment {
     // Replace output; only separator storage is reused between calls.
-    static auto cut_into(const DictTrie &dict, const HMModel &, std::span<const Rune> runes,
-                         std::vector<WordRange> &range, detail::SegmentScratch &scratch) -> void {
+    static
+    auto cut_into(const DictTrie &dict, const HMModel &, std::span<const Rune> runes, std::vector<WordRange> &range,
+                  detail::SegmentScratch &scratch) -> void {
         assert(detail::size_fits_capacity<RuneIndex>(runes.size()));
         range.clear();
         // Overlapping matches can exceed one word per rune; this covers typical input without regrowth.
@@ -39,8 +40,9 @@ struct FullSegment {
 
 private:
     /// Emit all dictionary matches inside one separator-free segment, plus uncovered single-rune fallbacks.
-    static auto cut_one_segment(const DictTrie &dict, std::span<const Rune> runes, RuneIndex pos,
-                                std::vector<WordRange> &result) -> void {
+    static
+    auto cut_one_segment(const DictTrie &dict, std::span<const Rune> runes, RuneIndex pos,
+                         std::vector<WordRange> &result) -> void {
         // max_covered tracks the furthest rune position covered by previously emitted dictionary words; used to decide
         // whether to emit single-char fallback tokens.
         auto max_covered = size_t{0};

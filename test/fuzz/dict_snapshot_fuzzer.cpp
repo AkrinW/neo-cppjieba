@@ -13,7 +13,8 @@ using namespace neo_cppjieba;
 
 // Malformed snapshots must be rejected through the checked exception; internal assertions stay fatal.
 // Mutations rarely keep a 64-bit checksum valid, so reseal it to reach the section and trie validators.
-extern "C" auto LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size) -> int {
+extern
+"C" auto LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size) -> int {
     const auto input = std::as_bytes(std::span{data, size});
     auto bytes = std::vector<std::byte>{input.begin(), input.end()};
     if (bytes.size() >= detail::kSnapshotV1HeaderSize) {

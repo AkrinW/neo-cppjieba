@@ -46,19 +46,22 @@ auto benchmark_main(int argc, char *argv[], const Run &run) -> int {
 }
 
 // Throw usage when more positional arguments remain than the program accepts.
-inline auto check_positional_count(BenchmarkArgs args, std::size_t max_positional, const char *usage) -> void {
+inline
+auto check_positional_count(BenchmarkArgs args, std::size_t max_positional, const char *usage) -> void {
     if (args.size() > max_positional + 1) {
         throw std::invalid_argument(usage);
     }
 }
 
 // Return positional argument index (1 is the first after the program name), or fallback when it is absent.
-inline auto positional_argument(BenchmarkArgs args, std::size_t index, const std::string &fallback) -> std::string {
+inline
+auto positional_argument(BenchmarkArgs args, std::size_t index, const std::string &fallback) -> std::string {
     return index < args.size() ? std::string{args[index]} : fallback;
 }
 
 // Load the nonempty lines of a UTF-8 corpus, rejecting a missing or empty file before any benchmark runs.
-inline auto require_lines(const std::string &path) -> std::vector<std::string> {
+inline
+auto require_lines(const std::string &path) -> std::vector<std::string> {
     auto lines = load_lines(path);
     if (lines.empty()) {
         throw std::runtime_error("no input lines loaded from " + path);
@@ -67,24 +70,28 @@ inline auto require_lines(const std::string &path) -> std::vector<std::string> {
 }
 
 // Report lines and runes per second for iterations that each process the whole corpus once.
-inline auto set_corpus_rates(benchmark::State &state, std::size_t lines, std::size_t runes) -> void {
+inline
+auto set_corpus_rates(benchmark::State &state, std::size_t lines, std::size_t runes) -> void {
     state.SetItemsProcessed(state.iterations() * static_cast<std::int64_t>(lines));
     state.counters["runes"] =
         benchmark::Counter(static_cast<double>(runes), benchmark::Counter::kIsIterationInvariantRate);
 }
 
 // Report bytes per second for iterations that each process the same bytes of input once.
-inline auto set_bytes_rate(benchmark::State &state, std::size_t bytes) -> void {
+inline
+auto set_bytes_rate(benchmark::State &state, std::size_t bytes) -> void {
     state.SetBytesProcessed(state.iterations() * static_cast<std::int64_t>(bytes));
 }
 
 // Seconds since start, for benchmark::State::SetIterationTime when only part of an iteration is measured.
-inline auto elapsed_seconds(Clock::time_point start) -> double {
+inline
+auto elapsed_seconds(Clock::time_point start) -> double {
     return std::chrono::duration<double>(Clock::now() - start).count();
 }
 
 // Indices 0..count-1 in a fixed pseudo-random order, so shuffled lookups visit the same sequence in every run.
-inline auto shuffled_indices(std::size_t count, std::uint32_t seed) -> std::vector<std::size_t> {
+inline
+auto shuffled_indices(std::size_t count, std::uint32_t seed) -> std::vector<std::size_t> {
     auto shuffled = std::vector<std::size_t>(count);
     std::iota(shuffled.begin(), shuffled.end(), std::size_t{0});
     auto rng = std::mt19937{seed};

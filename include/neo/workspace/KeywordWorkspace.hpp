@@ -24,7 +24,8 @@ public:
     }
 
 private:
-    friend auto detail::keyword_state(KeywordWorkspace &workspace) noexcept -> detail::KeywordState &;
+    friend
+    auto detail::keyword_state(KeywordWorkspace &workspace) noexcept -> detail::KeywordState &;
 
     detail::KeywordState state_;
 };
@@ -32,7 +33,8 @@ private:
 namespace detail {
 
 // The single access point to a keyword workspace's buffers; extractors unpack it before calling algorithms.
-inline auto keyword_state(KeywordWorkspace &workspace) noexcept -> KeywordState & {
+inline
+auto keyword_state(KeywordWorkspace &workspace) noexcept -> KeywordState & {
     return workspace.state_;
 }
 

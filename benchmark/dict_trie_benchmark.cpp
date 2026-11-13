@@ -44,7 +44,8 @@ constexpr auto kShuffleSeed = std::uint32_t{42};
 // ─────────────────────────────────────────────────────────────────────────────
 // Load raw UTF-8 words from dict file (word only, for query key generation)
 // ─────────────────────────────────────────────────────────────────────────────
-static auto load_words(const std::string &dict_path) -> std::vector<std::string> {
+static
+auto load_words(const std::string &dict_path) -> std::vector<std::string> {
     auto words = std::vector<std::string>{};
     words.reserve(350000);
 

@@ -15,9 +15,8 @@
 namespace neo_cppjieba::detail {
 
 /// Check a word partition whose rune span starts at a caller-provided global offset.
-[[nodiscard]]
-inline auto valid_segment_partition_at(std::span<const WordRange> words, size_t rune_count, RuneIndex pos) noexcept
-    -> bool {
+[[nodiscard]] inline
+auto valid_segment_partition_at(std::span<const WordRange> words, size_t rune_count, RuneIndex pos) noexcept -> bool {
     auto next = pos;
     for (const auto &word : words) {
         if (word.begin != next || word.begin >= word.end || static_cast<RuneIndex>(word.end - pos) > rune_count) {
@@ -29,8 +28,8 @@ inline auto valid_segment_partition_at(std::span<const WordRange> words, size_t 
 }
 
 /// Check that local word ranges form a nonempty-token partition of the rune span.
-[[nodiscard]]
-inline auto valid_segment_partition(std::span<const WordRange> words, size_t rune_count) noexcept -> bool {
+[[nodiscard]] inline
+auto valid_segment_partition(std::span<const WordRange> words, size_t rune_count) noexcept -> bool {
     return valid_segment_partition_at(words, rune_count, 0);
 }
 
@@ -39,8 +38,9 @@ inline auto valid_segment_partition(std::span<const WordRange> words, size_t run
 /// on_separator(offset) receives each separator rune between them, in input order.
 /// The separator list is caller-owned scratch; the callbacks must not modify it.
 template <SegmentVisitor OnText, SeparatorVisitor OnSeparator>
-inline auto for_each_separated(std::span<const Rune> runes, OnText &&on_text, OnSeparator &&on_separator,
-                               std::vector<RuneIndex> &separators) -> void {
+inline
+auto for_each_separated(std::span<const Rune> runes, OnText &&on_text, OnSeparator &&on_separator,
+                        std::vector<RuneIndex> &separators) -> void {
     get_pre_filter_separators(runes, separators);
     // The final entry is the runes.size() sentinel, so every separator is followed by one more text span.
     auto begin = RuneIndex{0};

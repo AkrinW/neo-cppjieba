@@ -203,7 +203,8 @@ protected:
     inline static std::vector<DictEntry> entries_{};
     inline static bool loaded_{false};
 
-    static auto SetUpTestSuite() -> void {
+    static
+    auto SetUpTestSuite() -> void {
         if (loaded_) {
             return;
         }

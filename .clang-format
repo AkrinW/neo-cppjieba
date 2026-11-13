@@ -46,8 +46,10 @@ AllowShortLambdasOnASingleLine: Inline
 AllowShortLoopsOnASingleLine: false
 AlwaysBreakTemplateDeclarations: Yes
 AlignEscapedNewlines: Left
-# Attribute groups before a declaration take their own line; list several in one group: [[nodiscard, NEO_FORCE_INLINE]].
-BreakAfterAttributes: Always
+# Function attributes share a line with specifiers; variable attributes stay on their own line.
+# Leave preserves manual breaks; list several attributes in one group: [[nodiscard, NEO_FORCE_INLINE]].
+BreakAfterAttributes: Leave
+BreakBeforeReturnType: All
 
 SortIncludes: true
 IncludeBlocks: Regroup

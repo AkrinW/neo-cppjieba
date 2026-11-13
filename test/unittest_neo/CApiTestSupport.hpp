@@ -30,17 +30,20 @@ using WorkspaceOwner = std::unique_ptr<neo_jieba_workspace_v1, decltype(&neo_jie
 using RangesOwner = std::unique_ptr<neo_jieba_ranges_v1, decltype(&neo_jieba_v1_ranges_destroy)>;
 
 // Describe a path as a C source; the path text must outlive the call that reads it.
-inline auto file_source(std::string_view path) -> neo_jieba_source_v1 {
+inline
+auto file_source(std::string_view path) -> neo_jieba_source_v1 {
     return {NEO_JIEBA_V1_SOURCE_FILE, 0, path.data(), path.size()};
 }
 
 // Describe borrowed contents as a C source.
-inline auto memory_source(std::string_view text) -> neo_jieba_source_v1 {
+inline
+auto memory_source(std::string_view text) -> neo_jieba_source_v1 {
     return {NEO_JIEBA_V1_SOURCE_MEMORY, 0, text.data(), text.size()};
 }
 
 // Load a repository file as the contents a memory source borrows.
-inline auto read_text(std::string_view path) -> std::string {
+inline
+auto read_text(std::string_view path) -> std::string {
     auto input = std::ifstream{std::string{path}, std::ios::binary};
     return {std::istreambuf_iterator<char>{input}, std::istreambuf_iterator<char>{}};
 }
@@ -48,7 +51,8 @@ inline auto read_text(std::string_view path) -> std::string {
 // A shared engine amortizes dictionary loading; every test owns its diagnostics and results.
 class CApiTest : public testing::Test {
 protected:
-    static void SetUpTestSuite() {
+    static
+    void SetUpTestSuite() {
         auto storage = std::array<char, 512>{};
         auto diagnostic = neo_jieba_error_buffer_v1{storage.data(), storage.size(), 0};
         neo_jieba_engine_v1 *created = nullptr;
@@ -56,7 +60,8 @@ protected:
         engine.reset(created);
     }
 
-    static void TearDownTestSuite() {
+    static
+    void TearDownTestSuite() {
         engine.reset();
     }
 
@@ -110,7 +115,8 @@ protected:
 };
 
 // Copy words only in the test harness; the public result itself contains byte ranges.
-inline auto words(const neo_jieba_borrowed_tokens_v1 &data) -> std::vector<std::string> {
+inline
+auto words(const neo_jieba_borrowed_tokens_v1 &data) -> std::vector<std::string> {
     auto result = std::vector<std::string>{};
     result.reserve(data.count);
     for (uint64_t index = 0; index < data.count; ++index) {
@@ -121,7 +127,8 @@ inline auto words(const neo_jieba_borrowed_tokens_v1 &data) -> std::vector<std::
 }
 
 // Slice the caller's input by borrowed ranges, as a zero-copy caller does.
-inline auto words(std::string_view input, const neo_jieba_borrowed_ranges_v1 &data) -> std::vector<std::string> {
+inline
+auto words(std::string_view input, const neo_jieba_borrowed_ranges_v1 &data) -> std::vector<std::string> {
     auto result = std::vector<std::string>{};
     result.reserve(data.count);
     for (uint64_t index = 0; index < data.count; ++index) {
@@ -131,12 +138,14 @@ inline auto words(std::string_view input, const neo_jieba_borrowed_ranges_v1 &da
 }
 
 // A tag's text stops at its NUL padding; a four-byte tag has none.
-inline auto tag_text(const neo_jieba_pos_tag_v1 &tag) -> std::string_view {
+inline
+auto tag_text(const neo_jieba_pos_tag_v1 &tag) -> std::string_view {
     return {std::ranges::begin(tag.data), std::ranges::find(tag.data, '\0')};
 }
 
 // Build a NUL-padded tag from at most four bytes of text.
-inline auto c_tag(std::string_view text) -> neo_jieba_pos_tag_v1 {
+inline
+auto c_tag(std::string_view text) -> neo_jieba_pos_tag_v1 {
     auto tag = neo_jieba_pos_tag_v1{};
     std::ranges::copy(text.substr(0, sizeof(tag.data)), std::ranges::begin(tag.data));
     return tag;
@@ -154,7 +163,8 @@ inline constexpr auto sentences = std::array<std::string_view, 3>{
     "他来到了网易杭研大厦", "小明硕士毕业于中国科学院计算所，后在日本京都大学深造", "去医院做B超，编号123😀"};
 
 // Each call owns its result and diagnostics, as concurrent callers must; a failed call yields no words.
-inline auto cut_words(const neo_jieba_engine_v1 *engine, std::string_view input, neo_jieba_mode_v1 mode)
+inline
+auto cut_words(const neo_jieba_engine_v1 *engine, std::string_view input, neo_jieba_mode_v1 mode)
     -> std::vector<std::string> {
     auto storage = std::array<char, 256>{};
     auto diagnostic = neo_jieba_error_buffer_v1{storage.data(), storage.size(), 0};
@@ -172,7 +182,8 @@ inline auto cut_words(const neo_jieba_engine_v1 *engine, std::string_view input,
 }
 
 // Cut every sentence in every mode, as one worker sharing the engine does.
-inline auto cut_all(const neo_jieba_engine_v1 *engine) -> std::vector<std::vector<std::string>> {
+inline
+auto cut_all(const neo_jieba_engine_v1 *engine) -> std::vector<std::vector<std::string>> {
     auto results = std::vector<std::vector<std::string>>{};
     results.reserve(all_modes.size() * sentences.size());
     for (const auto mode : all_modes) {

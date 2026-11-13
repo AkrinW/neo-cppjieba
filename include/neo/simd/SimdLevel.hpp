@@ -49,14 +49,14 @@ static_assert(compiled_backends.front() == SimdLevel::OFF && compiled_backends.b
               "compiled_backends must run from the scalar backend up to the build level");
 
 /// Whether this build compiles backend; the kernel entries reject any other.
-[[nodiscard]]
-constexpr auto is_compiled_backend(SimdLevel backend) noexcept -> bool {
+[[nodiscard]] constexpr
+auto is_compiled_backend(SimdLevel backend) noexcept -> bool {
     return std::ranges::contains(compiled_backends, backend);
 }
 
 /// The level's name as the CPPJIEBA_SIMD option spells it.
-[[nodiscard]]
-constexpr auto level_name(SimdLevel value) noexcept -> std::string_view {
+[[nodiscard]] constexpr
+auto level_name(SimdLevel value) noexcept -> std::string_view {
     switch (value) {
         case SimdLevel::OFF:
             return "OFF";
@@ -72,7 +72,8 @@ constexpr auto level_name(SimdLevel value) noexcept -> std::string_view {
 
 /// Call visit.template operator()<backend>() for each of compiled_backends, scalar first.
 template <typename Visit>
-constexpr auto for_each_compiled_backend(const Visit &visit) -> void {
+constexpr
+auto for_each_compiled_backend(const Visit &visit) -> void {
     [&]<std::size_t... I>(std::index_sequence<I...>) {
         (visit.template operator()<compiled_backends[I]>(), ...);
     }(std::make_index_sequence<compiled_backends.size()>{});

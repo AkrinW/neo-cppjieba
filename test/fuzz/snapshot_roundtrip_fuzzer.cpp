@@ -71,7 +71,8 @@ auto tagged_cut(const Jieba &jieba, std::string_view probe, CutMode mode) -> std
 // The first byte selects whether the first part is the main dictionary, otherwise the small dictionary is; the rest
 // holds up to three parts split at 0xFF bytes, the remaining parts being user dictionaries. Sources that load must
 // encode deterministically into a snapshot that cuts and tags exactly as the text-loaded engine in every mode.
-extern "C" auto LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size) -> int {
+extern
+"C" auto LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size) -> int {
     auto reader = ByteReader{data, size};
     const auto fuzzed_main = (reader.byte() & 1) != 0;
     const auto parts = split_parts(reader.rest(), 3);

@@ -65,14 +65,14 @@ public:
     }
 
     /// Check whether the tag is empty (i.e. "").
-    [[nodiscard]]
-    constexpr auto empty() const noexcept -> bool {
+    [[nodiscard]] constexpr
+    auto empty() const noexcept -> bool {
         return data_[0] == '\0';
     }
 
     /// Return the length of the tag (0–4).
-    [[nodiscard]]
-    constexpr auto size() const noexcept -> size_t {
+    [[nodiscard]] constexpr
+    auto size() const noexcept -> size_t {
         for (auto i = size_t{0}; i < MaxLength; ++i) {
             if (data_[i] == '\0') {
                 return i;
@@ -84,22 +84,22 @@ public:
     /// Return a pointer to the internal character data.
     /// The data is not necessarily null-terminated when size() == MaxLength.
     /// Borrowing from a temporary is disabled to avoid dangling pointers.
-    [[nodiscard]]
-    constexpr auto data() const & noexcept -> const char * {
+    [[nodiscard]] constexpr
+    auto data() const & noexcept -> const char * {
         return data_;
     }
-    [[nodiscard]]
-    constexpr auto data() const && noexcept -> const char * = delete;
+    [[nodiscard]] constexpr
+    auto data() const && noexcept -> const char * = delete;
 
     /// Return a string_view directly referencing the internal storage (zero-copy).
     /// The returned view is valid as long as this PosTag object is alive.
     /// Borrowing from a temporary is disabled to avoid dangling views.
-    [[nodiscard]]
-    constexpr auto to_string_view() const & noexcept -> std::string_view {
+    [[nodiscard]] constexpr
+    auto to_string_view() const & noexcept -> std::string_view {
         return std::string_view{data_, size()};
     }
-    [[nodiscard]]
-    constexpr auto to_string_view() const && noexcept -> std::string_view = delete;
+    [[nodiscard]] constexpr
+    auto to_string_view() const && noexcept -> std::string_view = delete;
 
     /// Convert to std::string (explicit, makes a copy).
     [[nodiscard]]
@@ -108,28 +108,33 @@ public:
     }
 
     /// Comparison operators — use raw() for single-instruction comparison.
-    constexpr auto operator==(const PosTag &other) const noexcept -> bool {
+    constexpr
+    auto operator==(const PosTag &other) const noexcept -> bool {
         return raw() == other.raw();
     }
-    constexpr auto operator!=(const PosTag &other) const noexcept -> bool {
+    constexpr
+    auto operator!=(const PosTag &other) const noexcept -> bool {
         return raw() != other.raw();
     }
     /// Ordering follows the packed value, not lexicographical tag order.
-    constexpr auto operator<(const PosTag &other) const noexcept -> bool {
+    constexpr
+    auto operator<(const PosTag &other) const noexcept -> bool {
         return raw() < other.raw();
     }
 
     /// Compare directly with a string_view.
-    constexpr auto operator==(std::string_view sv) const noexcept -> bool {
+    constexpr
+    auto operator==(std::string_view sv) const noexcept -> bool {
         return to_string_view() == sv;
     }
-    constexpr auto operator!=(std::string_view sv) const noexcept -> bool {
+    constexpr
+    auto operator!=(std::string_view sv) const noexcept -> bool {
         return !(*this == sv);
     }
 
     /// Access the raw packed value (for efficient comparison / switch on raw()).
-    [[nodiscard]]
-    constexpr auto raw() const noexcept -> uint32_t {
+    [[nodiscard]] constexpr
+    auto raw() const noexcept -> uint32_t {
         auto v = uint32_t{0};
         for (auto i = size_t{0}; i < MaxLength; ++i) {
             v |= static_cast<uint32_t>(static_cast<unsigned char>(data_[i])) << (i * 8);
@@ -139,7 +144,8 @@ public:
 
 private:
     // Validate the pointer before string_view scans for the terminating NUL.
-    static constexpr auto checked_c_string(const char *s) -> std::string_view {
+    static constexpr
+    auto checked_c_string(const char *s) -> std::string_view {
         if (s == nullptr) [[unlikely]] {
             check(false, "POS tag C-string must not be null");
         }

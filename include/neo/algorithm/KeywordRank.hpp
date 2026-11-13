@@ -54,7 +54,8 @@ auto collect_candidates(const StopWords &stop_words, const TagOf &tag_of, const 
 }
 
 // TF-IDF: each distinct word weighs its occurrence count times its IDF.
-inline auto weigh_tfidf(const IdfTable &idf, std::span<const Rune> runes, CandidateTable &table) -> void {
+inline
+auto weigh_tfidf(const IdfTable &idf, std::span<const Rune> runes, CandidateTable &table) -> void {
     for (const auto &occurrence : table.occurrences) {
         table.candidates[occurrence.candidate].weight += 1.0;
     }
@@ -64,7 +65,8 @@ inline auto weigh_tfidf(const IdfTable &idf, std::span<const Rune> runes, Candid
 }
 
 // Rank candidates by code point order of their words into scratch.ranks; scratch.by_word holds the inverse.
-inline auto rank_by_word(std::span<const Rune> runes, const CandidateTable &table, TextRankScratch &scratch) -> void {
+inline
+auto rank_by_word(std::span<const Rune> runes, const CandidateTable &table, TextRankScratch &scratch) -> void {
     const auto candidate_count = table.candidates.size();
     scratch.by_word.resize(candidate_count);
     std::iota(scratch.by_word.begin(), scratch.by_word.end(), size_t{0});
@@ -77,7 +79,8 @@ inline auto rank_by_word(std::span<const Rune> runes, const CandidateTable &tabl
 
 // Build one merged adjacency array per node, neighbors in rank order; returns the number of nodes with edges.
 // Each pair within the window adds weight 1 in both directions; a word next to itself gets a self-loop of weight 2.
-inline auto build_cooccurrence_graph(const CandidateTable &table, size_t window, TextRankScratch &scratch) -> size_t {
+inline
+auto build_cooccurrence_graph(const CandidateTable &table, size_t window, TextRankScratch &scratch) -> size_t {
     auto &edges = scratch.edges;
     edges.clear();
     const auto &occurrences = table.occurrences;
@@ -116,8 +119,9 @@ inline auto build_cooccurrence_graph(const CandidateTable &table, size_t window,
 
 // Run TextRank over the graph, then normalize so the best score is 1 into candidate weights.
 // Words without edges keep score 0 and still take part in normalization, as in CppJieba.
-inline auto iterate_text_rank(size_t node_count, size_t iterations, double damping, CandidateTable &table,
-                              TextRankScratch &scratch) -> void {
+inline
+auto iterate_text_rank(size_t node_count, size_t iterations, double damping, CandidateTable &table,
+                       TextRankScratch &scratch) -> void {
     assert_check([&] { return node_count > 0; }, "TextRank: iteration needs at least one connected node");
     const auto candidate_count = table.candidates.size();
     const auto neighbors = [&](size_t rank) {
@@ -158,8 +162,9 @@ inline auto iterate_text_rank(size_t node_count, size_t iterations, double dampi
 
 // CppJieba updates scores in place, visiting nodes and neighbors in UTF-8 byte order of the words.
 // Ranks sort words by code point, which is the same order, so every floating-point step matches.
-inline auto weigh_text_rank(std::span<const Rune> runes, const TextRankOptions &options, CandidateTable &table,
-                            TextRankScratch &scratch) -> void {
+inline
+auto weigh_text_rank(std::span<const Rune> runes, const TextRankOptions &options, CandidateTable &table,
+                     TextRankScratch &scratch) -> void {
     rank_by_word(runes, table, scratch);
     const auto node_count = build_cooccurrence_graph(table, options.window, scratch);
     if (node_count == 0) {
