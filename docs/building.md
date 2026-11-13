@@ -149,7 +149,7 @@ LLVM 23 来自 apt.llvm.org，软件源由 `tools/add-llvm-apt-source.sh` 添加
 
 | 检查 | 本地命令 |
 | --- | --- |
-| clang-format | `tools/clang-format-recursive.sh --check`；去掉 `--check` 即就地格式化 |
+| clang-format | `tools/clang-format-recursive.sh --check include/neo api test examples benchmark`；去掉 `--check` 即就地格式化 |
 | clang-tidy | `BUILD_DIR=build tools/clang-tidy-recursive.sh --check`；去掉 `--check` 即循环应用修复 |
 | clang 静态分析 | `CLANG_TIDY_CHECKS='-*,clang-analyzer-*,-clang-analyzer-cplusplus.Move,-clang-analyzer-optin.core.EnumCastOutOfRange' PER_FILE_TIMEOUT=900 BUILD_DIR=build tools/clang-tidy-recursive.sh --check` |
 | 头文件自足 | `tools/check-headers.sh`，`CLANG_CXX` 指定 Clang；`BUILD_TESTING` 构建同时编译 `neo_header_check` |
